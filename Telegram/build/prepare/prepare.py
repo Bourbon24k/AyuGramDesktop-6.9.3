@@ -1397,7 +1397,7 @@ depends:patches/breakpad.diff
     cd ../../build
     PYTHONPATH=$THIRDPARTY_DIR/gyp python3 gyp_breakpad
     cd ../processor
-    xcodebuild -project processor.xcodeproj -target minidump_stackwalk -configuration Release build
+    xcodebuild -project processor.xcodeproj -target minidump_stackwalk -configuration Release MACOSX_DEPLOYMENT_TARGET=12.0 build
 """)
 
 stage('breakpad', """
@@ -1436,11 +1436,11 @@ mac:
     git checkout e1e7b0ad8e
     cd ../../..
     cd src/client/mac
-    xcodebuild -project Breakpad.xcodeproj -target Breakpad -configuration Debug build
+    xcodebuild -project Breakpad.xcodeproj -target Breakpad -configuration Debug MACOSX_DEPLOYMENT_TARGET=12.0 build
 release:
-    xcodebuild -project Breakpad.xcodeproj -target Breakpad -configuration Release build
+    xcodebuild -project Breakpad.xcodeproj -target Breakpad -configuration Release MACOSX_DEPLOYMENT_TARGET=12.0 build
     cd ../../tools/mac/dump_syms
-    xcodebuild -project dump_syms.xcodeproj -target dump_syms -configuration Release build
+    xcodebuild -project dump_syms.xcodeproj -target dump_syms -configuration Release MACOSX_DEPLOYMENT_TARGET=12.0 build
 """)
 
 stage('crashpad', """
@@ -1598,7 +1598,7 @@ mac:
 
     CONFIGURATIONS=-debug
 release:
-    CONFIGURATIONS=-debug-and-release
+    CONFIGURATIONS=-release
 mac:
     ./configure -prefix "$USED_PREFIX/Qt-$QT" \
         $CONFIGURATIONS \
@@ -1692,7 +1692,7 @@ win:
 """)
 
 stage('tg_owt', """
-    git clone https://github.com/desktop-app/tg_owt.git
+    git clone --filter=blob:none https://github.com/desktop-app/tg_owt.git
     cd tg_owt
     git checkout 89df288dd6ba5b2ec95b3c5eaf1e7e0c3a870fc4
     git submodule update --init --recursive

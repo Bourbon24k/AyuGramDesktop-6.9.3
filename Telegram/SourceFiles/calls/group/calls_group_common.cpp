@@ -273,6 +273,9 @@ void ShowConferenceCallLinkBox(
 		std::shared_ptr<Main::SessionShow> show,
 		std::shared_ptr<Data::GroupCall> call,
 		const ConferenceCallLinkArgs &args) {
+	if (!show || !call) {
+		return;
+	}
 	const auto st = args.st;
 	const auto initial = args.initial;
 	const auto link = call->conferenceInviteLink();

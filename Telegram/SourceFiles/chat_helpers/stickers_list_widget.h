@@ -409,6 +409,7 @@ private:
 		const std::vector<uint64> *cloudSets);
 	void fillLocalSearchShortcuts(const QString &query);
 	bool addSearchShortcut(not_null<Data::StickersSet*> set);
+	void addSearchRow(not_null<Data::StickersSet*> set);
 	void fillSelectedSearchShortcut();
 	[[nodiscard]] bool searchShortcutsShown() const;
 	[[nodiscard]] bool searchShortcutSelected() const;
