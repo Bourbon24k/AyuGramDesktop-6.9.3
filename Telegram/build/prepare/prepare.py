@@ -1425,12 +1425,12 @@ depends:python/Scripts/activate.bat
     ninja -C out/Debug%FolderPostfix% common crash_generation_client exception_handler
 release:
     ninja -C out/Release%FolderPostfix% common crash_generation_client exception_handler
-    if "%TDESKTOP_SKIP_DUMP_SYMS%" == "1" goto skip_dump_syms
-    cd tools\\windows\\dump_syms
-    gyp dump_syms.gyp --format=msvs
-    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" %ToolsetProp%
-    cd ..\\..\\..
-:skip_dump_syms
+    if not "%TDESKTOP_SKIP_DUMP_SYMS%" == "1" (
+      cd tools\\windows\\dump_syms
+      gyp dump_syms.gyp --format=msvs
+      msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" %ToolsetProp%
+      cd ..\\..\\..
+    )
 win:
     deactivate
 mac:
