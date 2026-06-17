@@ -20,21 +20,6 @@ jobs:
         run: |
           git config --global core.longpaths true
 
-      - name: Install ATL component
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          Start-Process -FilePath $installer -ArgumentList @(
-            "modify",
-            "--installPath", "`"$installPath`"",
-            "--add", "Microsoft.VisualStudio.Component.VC.ATL",
-            "--passive",
-            "--norestart",
-            "--wait"
-          ) -Wait -NoNewWindow
-
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -42,6 +27,8 @@ jobs:
 
       - name: Prepare dependencies
         shell: cmd
+        env:
+          TDESKTOP_SKIP_DUMP_SYMS: "1"
         run: |
           Telegram\build\prepare\win.bat
 
