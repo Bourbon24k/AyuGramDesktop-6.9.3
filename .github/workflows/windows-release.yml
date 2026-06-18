@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-win64:
-    runs-on: windows-2025
+    runs-on: windows-2022
     timeout-minutes: 360
 
     steps:
