@@ -46,10 +46,10 @@ jobs:
           Set-CimInstance -InputObject $computer
           $pagefile = Get-CimInstance Win32_PageFileSetting | Where-Object { $_.Name -eq "D:\pagefile.sys" }
           if (-not $pagefile) {
-            New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = "D:\pagefile.sys"; InitialSize = 16384; MaximumSize = 32768 }
+            New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = "D:\pagefile.sys"; InitialSize = [uint32]16384; MaximumSize = [uint32]32768 }
           } else {
-            $pagefile.InitialSize = 16384
-            $pagefile.MaximumSize = 32768
+            $pagefile.InitialSize = [uint32]16384
+            $pagefile.MaximumSize = [uint32]32768
             Set-CimInstance -InputObject $pagefile
           }
 
