@@ -38,10 +38,25 @@ jobs:
           cd Telegram
           configure.bat x64 -D TDESKTOP_API_ID=2040 -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
 
+      - name: Expand pagefile
+        shell: pwsh
+        run: |
+          $computer = Get-CimInstance Win32_ComputerSystem
+          $computer.AutomaticManagedPagefile = $false
+          Set-CimInstance -InputObject $computer
+          $pagefile = Get-CimInstance Win32_PageFileSetting | Where-Object { $_.Name -eq "D:\pagefile.sys" }
+          if (-not $pagefile) {
+            New-CimInstance -ClassName Win32_PageFileSetting -Property @{ Name = "D:\pagefile.sys"; InitialSize = 16384; MaximumSize = 32768 }
+          } else {
+            $pagefile.InitialSize = 16384
+            $pagefile.MaximumSize = 32768
+            Set-CimInstance -InputObject $pagefile
+          }
+
       - name: Build Release
         shell: cmd
         run: |
-          cmake --build out --config Release --target Telegram --parallel 2
+          cmake --build out --config Release --target Telegram --parallel 1
 
       - name: Package portable build
         shell: pwsh
