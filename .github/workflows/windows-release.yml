@@ -62,7 +62,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path out\Release\* -DestinationPath dist\AyuGram-6.9.3-windows-x64-portable.zip -Force
+          7z a -tzip -mx=9 dist\AyuGram-6.9.3-windows-x64-portable.zip .\out\Release\* -xr!*.pdb -xr!*.ilk -xr!*.exp -xr!*.lib
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
