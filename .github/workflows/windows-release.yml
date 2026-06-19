@@ -58,15 +58,15 @@ jobs:
         run: |
           cmake --build out --config Release --target Telegram --parallel 1
 
-      - name: Package portable build
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          7z a -tzip -mx=9 dist\AyuGram-6.9.3-windows-x64-portable.zip .\out\Release\* -xr!*.pdb -xr!*.ilk -xr!*.exp -xr!*.lib
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: AyuGram-6.9.3-windows-x64-portable
-          path: dist/AyuGram-6.9.3-windows-x64-portable.zip
+          path: |
+            out/Release/**
+            !out/Release/**/*.pdb
+            !out/Release/**/*.ilk
+            !out/Release/**/*.exp
+            !out/Release/**/*.lib
           if-no-files-found: error
+          compression-level: 9
