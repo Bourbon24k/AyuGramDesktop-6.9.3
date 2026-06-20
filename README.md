@@ -4,6 +4,17 @@
 
 [ English  |   [Русский](README-RU.md) ]
 
+## About this fork
+
+This repository is an unofficial AyuGram Desktop fork maintained for the `6.9.3` rebuild.
+
+It keeps AyuGram features while updating the underlying Telegram Desktop source base to Telegram Desktop `6.9.3`.
+The fork also carries build fixes needed for current macOS and Windows toolchains.
+
+Prebuilt artifacts for this fork are published in this repository's
+[Releases](https://github.com/Bourbon24k/AyuGramDesktop-6.9.3/releases).
+Use the upstream AyuGram repository for official AyuGram releases and support.
+
 ## Features
 
 - Full ghost mode (flexible)
