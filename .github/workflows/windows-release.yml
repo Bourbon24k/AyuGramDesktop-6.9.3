@@ -29,6 +29,7 @@ jobs:
         shell: cmd
         env:
           TDESKTOP_SKIP_DUMP_SYMS: "1"
+          NUMBER_OF_PROCESSORS: "1"
         run: |
           Telegram\build\prepare\win.bat
 
