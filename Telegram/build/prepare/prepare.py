@@ -1089,6 +1089,7 @@ winarm:
     SET "TOOLCHAIN=arm64-win64-vs17-v145"
 win:
 depends:patches/build_libvpx_win.sh
+    sed -i "s/-m -t:Build/-m:1 -t:Build/" build/make/gen_msvs_sln.sh
     bash --login ../patches/build_libvpx_win.sh
 mac:
     find ../patches/libvpx -type f -print0 | sort -z | xargs -0 git apply
