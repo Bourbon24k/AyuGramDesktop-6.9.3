@@ -61,7 +61,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-6.9.3-windows-x64-portable
+          name: AyuGram-7.0.5-windows-x64-portable
           path: |
             out/Release/**
             !out/Release/**/*.pdb
