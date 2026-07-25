@@ -7,6 +7,8 @@ jobs:
   build-win64:
     runs-on: windows-2022
     timeout-minutes: 360
+    env:
+      PINNED_NASM_DIR: ${{ github.workspace }}\\third_party\\nasm-2.16.01
 
     steps:
       - name: Checkout
@@ -24,6 +26,21 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      - name: Install libvpx-compatible NASM
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'nasm-2.16.01-win64.zip'
+          Invoke-WebRequest -Uri 'https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/win64/nasm-2.16.01-win64.zip' -OutFile $archive
+          $expectedHash = '029eed31faf0d2c5f95783294432cbea6c15bf633430f254bb3c1f195c67ca3a'
+          if ((Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) { throw 'NASM archive SHA-256 mismatch.' }
+          $extract = Join-Path $env:RUNNER_TEMP 'nasm-2.16.01'
+          Expand-Archive -Path $archive -DestinationPath $extract
+          $binary = Get-ChildItem -Path $extract -Filter nasm.exe -Recurse | Select-Object -First 1
+          if (-not $binary) { throw 'NASM executable was not found in the downloaded archive.' }
+          New-Item -ItemType Directory -Path $env:PINNED_NASM_DIR -Force | Out-Null
+          Copy-Item $binary.FullName (Join-Path $env:PINNED_NASM_DIR 'nasm.exe')
+          & (Join-Path $env:PINNED_NASM_DIR 'nasm.exe') -v
 
       - name: Prepare dependencies
         shell: cmd

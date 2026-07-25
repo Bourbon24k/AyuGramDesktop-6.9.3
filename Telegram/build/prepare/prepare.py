@@ -1078,6 +1078,7 @@ win:
     for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
+    if defined PINNED_NASM_DIR SET PATH=%PINNED_NASM_DIR%;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
     SET MSYS2_PATH_TYPE=inherit
 
