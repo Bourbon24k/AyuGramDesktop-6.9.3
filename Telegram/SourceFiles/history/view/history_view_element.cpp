@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_transcribes.h"
 #include "history/view/history_view_service_message.h"
 #include "history/view/history_view_message.h"
+#include "history/view/media/history_view_community_added.h"
 #include "history/view/media/history_view_media_generic.h"
 #include "history/view/media/history_view_media_grouped.h"
 #include "history/view/media/history_view_similar_channels.h"
@@ -31,6 +32,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_session.h"
 #include "iv/iv_cached_media.h"
+#include "iv/iv_rich_page.h"
 #include "base/unixtime.h"
 #include "boxes/premium_preview_box.h"
 #include "core/application.h"
@@ -54,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/painter.h"
 #include "ui/rect.h"
 #include "ui/round_rect.h"
+#include "data/components/ephemeral_messages.h"
 #include "data/components/sponsored_messages.h"
 #include "data/data_channel.h"
 #include "data/data_groups.h"
@@ -569,6 +572,11 @@ void DefaultElementDelegate::elementCancelUpload(const FullMsgId &context) {
 void DefaultElementDelegate::elementShowTooltip(
 	const TextWithEntities &text,
 	Fn<void()> hiddenCallback) {
+}
+
+void DefaultElementDelegate::elementShowHiddenSenderTooltip(
+	FullMsgId itemId,
+	const TextWithEntities &text) {
 }
 
 bool DefaultElementDelegate::elementHideReply(
@@ -1210,6 +1218,35 @@ void FakeBotAboutTop::init() {
 	height = st::msgNameStyle.font->height + st::botDescSkip;
 }
 
+void EphemeralBadge::init(not_null<const HistoryItem*> item) {
+	if (!text.isEmpty()) {
+		return;
+	}
+	receiver = item->out()
+		? item->history()->session().ephemeralMessages().replyReceiver(item)
+		: nullptr;
+	if (item->out() && !receiver) {
+		return;
+	}
+	text.setText(
+		st::msgNameStyle,
+		(receiver
+			? tr::lng_ephemeral_visible_to(
+				tr::now,
+				lt_user,
+				(receiver->username().isEmpty()
+					? receiver->name()
+					: ('@' + receiver->username())))
+			: tr::lng_ephemeral_visible_you(tr::now)),
+		Ui::NameTextOptions());
+	maxWidth = st::msgPadding.left()
+		+ st::historyEphemeralIconIn.width()
+		+ st::historyEphemeralIconSkip
+		+ text.maxWidth()
+		+ st::msgPadding.right();
+	height = st::msgNameStyle.font->height + st::historyEphemeralBadgeBottom;
+}
+
 Element::Element(
 	not_null<ElementDelegate*> delegate,
 	not_null<HistoryItem*> data,
@@ -1243,6 +1280,10 @@ Element::Element(
 			AddComponents(FakeBotAboutTop::Bit());
 		}
 	}
+	if (data->isEphemeral()) {
+		AddComponents(EphemeralBadge::Bit());
+	}
+	const auto deletedOpacityEnabled
 	const auto deletedOpacityEnabled
 		= AyuSettings::getInstance().semiTransparentDeletedMessages();
 	if (deletedOpacityEnabled
@@ -1333,6 +1374,9 @@ void Element::clearSpecialOnlyEmoji() {
 }
 
 void Element::checkSpecialOnlyEmoji() {
+	if (data()->richPage()) {
+		return;
+	}
 	if (history()->session().emojiStickersPack().add(this)) {
 		_flags |= Flag::SpecialOnlyEmoji;
 	}
@@ -1739,6 +1783,24 @@ void Element::refreshMedia(Element *replacing) {
 				.service = true,
 				.hideServiceText = true,
 			});
+	} else if (const auto added = item->Get<HistoryServiceCommunityAdded>()) {
+		if (!added->community && added->communityId) {
+			// Resolve lazily in case the channel loaded after parse time.
+			added->community = history()->owner().channelLoaded(
+				added->communityId);
+		}
+		if (added->community) {
+			_media = std::make_unique<MediaGeneric>(
+				this,
+				GenerateCommunityAddedMedia(this, added->community),
+				MediaGenericDescriptor{
+					.maxWidth = st::msgServiceGiftBoxSize.width(),
+					.service = true,
+					.hideServiceText = true,
+				});
+		} else {
+			_media = nullptr;
+		}
 	} else {
 		_media = nullptr;
 	}
@@ -1814,7 +1876,8 @@ int Element::textHeightFor(int textWidth) const {
 		if (const auto rich = const_cast<Element*>(this)->richpage()) {
 			const auto articleHeight = rich->article.resizeGetHeight(
 				richPageWidthFor(textWidth));
-			_textHeight = articleHeight
+			_textHeight = st::mediaInBubbleSkip
+				+ articleHeight
 				+ (_text.hasSkipBlock() ? skipBlockHeight() : 0);
 			rich->article.setVisibleTopBottom(0, articleHeight);
 			_textRealWidth = std::clamp(
@@ -2047,6 +2110,7 @@ void Element::validateText() {
 		}
 		const auto &layoutSt = st::messageMarkdown;
 		const auto session = &history()->session();
+		const auto richLimits = Iv::ResolveRichMessageLimits(session);
 		runtime->page = std::move(page);
 		runtime->mediaRuntime = Iv::CreateMessageMediaRuntime(
 			session,
@@ -2058,6 +2122,8 @@ void Element::validateText() {
 			.mediaRuntime = runtime->mediaRuntime,
 			.dimensionsOverride = Iv::Markdown::CaptureMarkdownPrepareDimensions(
 				layoutSt),
+			.tableRenderLimits = Iv::Markdown::PrepareTableRenderLimitsForRichMessage(
+				richLimits),
 		});
 		if (!prepared.supported()) {
 			clearRichPage();
@@ -2153,13 +2219,13 @@ void Element::validateText() {
 			setTextWithLinks(tr::italic(unavailable));
 		} else {
 			setTextWithLinks(_textItem->translatedTextWithLocalEntities());
-			richPage = _textItem->richPage();
+			richPage = _textItem->translatedRichPage();
 		}
 	}
 	if (!richPage
 		&& !(_flags & Flag::ServiceMessage)
 		&& item->computeUnavailableReason().isEmpty()) {
-		richPage = _textItem->richPage();
+		richPage = _textItem->translatedRichPage();
 	}
 	ensureRichPage(std::move(richPage));
 }
@@ -2789,6 +2855,9 @@ void Element::refreshReactions() {
 					return;
 				}
 				if (id.paid()) {
+					if (!controller) {
+						return;
+					}
 					Payments::TryAddingPaidReaction(
 						item,
 						weak.get(),

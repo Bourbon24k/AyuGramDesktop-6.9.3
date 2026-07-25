@@ -46,6 +46,8 @@ public:
 	[[nodiscard]] virtual bool loading() const = 0;
 	[[nodiscard]] virtual double progress() const = 0;
 	virtual void open(Qt::MouseButton button) const = 0;
+	virtual void releaseHeavyData() {
+	}
 };
 
 class DocumentRuntime {
@@ -60,6 +62,8 @@ public:
 	[[nodiscard]] virtual bool loading() const = 0;
 	[[nodiscard]] virtual double progress() const = 0;
 	virtual void open(Qt::MouseButton button) const = 0;
+	virtual void releaseHeavyData() {
+	}
 };
 
 class MapRuntime {
@@ -234,6 +238,7 @@ struct EmbedRequest {
 
 struct MediaActivation {
 	MediaActivationKind kind = MediaActivationKind::None;
+	int itemIndex = -1;
 	QString url;
 	EmbedRequest embed;
 	PreparedPlaceholderBlockId placeholderId;
@@ -264,6 +269,7 @@ struct OpenOptions {
 	std::function<bool(
 		const MediaActivation &,
 		Qt::MouseButton)> activateMedia;
+	std::function<void()> zoomActivated;
 	rpl::producer<> downloadTaskFinished;
 };
 

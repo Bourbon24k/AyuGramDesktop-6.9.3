@@ -80,6 +80,7 @@ const style::InfoTopBar &TopBarStyle(Wrap wrap) {
 	const auto section = controller->section();
 	return (section.type() == Section::Type::BotStarRef)
 		|| (section.type() == Section::Type::Profile)
+		|| (section.type() == Section::Type::Community)
 		|| ((section.type() == Section::Type::Settings)
 			&& section.settingsType()->hasCustomTopBar())
 		|| (section.type() == Section::Type::Stories
@@ -175,8 +176,15 @@ WrapWidget::WrapWidget(
 }
 
 void WrapWidget::setupShortcuts() {
+	if (_shortcutsSetup) {
+		return;
+	}
+	_shortcutsSetup = true;
 	const auto isSettings = [=] {
 		return _controller->section().type() == Section::Type::Settings;
+	};
+	const auto isContentSearch = [=] {
+		return _content && _content->searchAvailable();
 	};
 	const auto isSearchSettings = [=] {
 		return isSettings()
@@ -188,7 +196,7 @@ void WrapWidget::setupShortcuts() {
 	) | rpl::filter([=] {
 		return (Core::App().activeWindow()
 				== &_controller->parentController()->window())
-			&& (requireTopBarSearch() || isSettings());
+			&& (requireTopBarSearch() || isSettings() || isContentSearch());
 	}) | rpl::on_next([=](not_null<Shortcuts::Request*> request) {
 		using Command = Shortcuts::Command;
 		request->check(Command::Search) && request->handle([=] {
@@ -198,6 +206,8 @@ void WrapWidget::setupShortcuts() {
 				_content->setInnerFocus();
 			} else if (isSettings()) {
 				_controller->showSettings(::Settings::Search::Id());
+			} else if (isContentSearch()) {
+				_content->showSearch();
 			}
 			return true;
 		});
@@ -359,6 +369,7 @@ void WrapWidget::setupTop() {
 		|| wrap() == Wrap::Search
 		|| wrap() == Wrap::StoryAlbumEdit) {
 		_topBar.destroy();
+		setupShortcuts();
 		return;
 	}
 	createTopBar();
@@ -845,6 +856,10 @@ void WrapWidget::setWrap(Wrap wrap) {
 	_wrap = wrap;
 }
 
+rpl::producer<bool> WrapWidget::contentTillBottomValue() const {
+	return _contentTillBottom.value();
+}
+
 rpl::producer<> WrapWidget::contentChanged() const {
 	return _contentChanges.events();
 }
@@ -1110,6 +1125,10 @@ void WrapWidget::resizeEvent(QResizeEvent *e) {
 }
 
 void WrapWidget::keyPressEvent(QKeyEvent *e) {
+	if (_content
+		&& (_content->processZoomKey(e) || _content->processScrollKey(e))) {
+		return;
+	}
 	if (e->key() == Qt::Key_Escape || e->key() == Qt::Key_Back) {
 		if (!closeByBackButton()) {
 			checkBeforeCloseByEscape(
@@ -1177,6 +1196,7 @@ object_ptr<Ui::RpWidget> WrapWidget::createTopBarSurrogate(
 void WrapWidget::updateGeometry(
 		QRect newGeometry,
 		bool expanding,
+		bool contentTillBottom,
 		int additionalScroll,
 		int maxVisibleHeight) {
 	auto scrollChanged = (_additionalScroll != additionalScroll);
@@ -1185,6 +1205,7 @@ void WrapWidget::updateGeometry(
 	_additionalScroll = additionalScroll;
 	_maxVisibleHeight = maxVisibleHeight;
 	_expanding = expanding;
+	_contentTillBottom = contentTillBottom;
 
 	_content->applyMaxVisibleHeight(maxVisibleHeight);
 

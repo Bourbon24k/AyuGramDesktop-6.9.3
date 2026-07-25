@@ -429,7 +429,7 @@ void Shown::prepare(not_null<Data*> data, const QString &hash) {
 	const auto id = data->id();
 	const auto page = _session->data().webpage(data->pageId());
 
-	if (_markdownRuntimeUrl != id) {
+	if (_markdownRuntimeUrl != page->url) {
 		_markdownMediaRuntime = nullptr;
 		_markdownRuntimeUrl = QString();
 	}
@@ -635,14 +635,14 @@ void Shown::moveTo(not_null<Data*> data, QString hash) {
 void Shown::update(not_null<Data*> data) {
 	const auto richPage = data->richPage();
 	const auto id = data->id();
+	const auto page = _session->data().webpage(data->pageId());
 
-	if (_markdownRuntimeUrl != id) {
+	if (_markdownRuntimeUrl != page->url) {
 		_markdownMediaRuntime = nullptr;
 		_markdownRuntimeUrl = QString();
 	}
 	_id = id;
 
-	const auto page = _session->data().webpage(data->pageId());
 	auto prepared = Markdown::TryPrepareNativeInstantView({
 		.richPage = richPage,
 		.mediaRuntime = createMediaRuntime(page),
@@ -1174,7 +1174,7 @@ bool Instance::MatchesRichMessageGeneration(
 }
 
 void Instance::resolveRichMessage(
-		not_null<Window::SessionController*> controller,
+		not_null<Main::Session*> session,
 		not_null<HistoryItem*> item,
 		RichMessageResolved done) {
 	if (const auto page = item->fullRichPage()) {
@@ -1186,7 +1186,6 @@ void Instance::resolveRichMessage(
 		done(richPage);
 		return;
 	}
-	const auto session = &controller->session();
 	const auto itemId = item->fullId();
 	const auto generation = CaptureRichMessageGeneration(item);
 	trackSession(session);
@@ -1241,7 +1240,8 @@ void Instance::showRichMessage(
 		QString initialFragment) {
 	const auto weak = base::make_weak(controller);
 	const auto itemId = item->fullId();
-	resolveRichMessage(controller, item, [=](std::shared_ptr<const RichPage> page) {
+	resolveRichMessage(&controller->session(), item, [=](
+			std::shared_ptr<const RichPage> page) {
 		const auto strong = weak.get();
 		const auto current = strong
 			? strong->session().data().message(itemId)
@@ -1285,9 +1285,12 @@ void Instance::showRichMessage(
 		[=](QString context) {
 			JoinRichMessageChannel(session, context);
 		});
+	const auto richLimits = ResolveRichMessageLimits(session);
 	auto prepared = Markdown::TryPrepareNativeInstantView({
 		.richPage = richPage,
 		.mediaRuntime = std::move(mediaRuntime),
+		.tableRenderLimits = Markdown::PrepareTableRenderLimitsForRichMessage(
+			richLimits),
 	});
 	if (!prepared.supported()) {
 		Ui::Toast::Show(tr::lng_iv_not_supported(tr::now));
