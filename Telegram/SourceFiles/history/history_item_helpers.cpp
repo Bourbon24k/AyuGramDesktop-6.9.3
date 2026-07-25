@@ -920,6 +920,7 @@ MessageFlags FlagsFromMTP(
 		| ((flags & MTP::f_from_id) ? Flag::HasFromId : Flag())
 		| ((flags & MTP::f_reply_to) ? Flag::HasReplyInfo : Flag())
 		| ((flags & MTP::f_reply_markup) ? Flag::HasReplyMarkup : Flag())
+		| ((flags & MTP::f_noforwards) ? Flag::NoForwards : Flag())
 		| ((flags & MTP::f_quick_reply_shortcut_id)
 			? Flag::ShortcutMessage
 			: Flag())

@@ -2294,11 +2294,6 @@ elseif (APPLE)
         target_link_libraries(Telegram PRIVATE desktop-app::external_iconv)
     endif()
 
-#    find_program(ACTOOL_EXECUTABLE actool)
-#    if(NOT ACTOOL_EXECUTABLE)
-#        message(FATAL_ERROR "actool not found.")
-#    endif()
-
     if (CMAKE_GENERATOR STREQUAL Xcode)
         set(ayugram_icons
             Default
@@ -2315,27 +2310,7 @@ elseif (APPLE)
             Extera2
         )
 
-#        set(ICON_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/IconOutput")
         foreach (icon ${ayugram_icons})
-#            add_custom_command(TARGET Telegram
-#                    PRE_LINK
-#                    COMMAND mkdir -p "${ICON_OUTPUT_DIR}"
-#                    COMMAND ${ACTOOL_EXECUTABLE}
-#                    "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon"
-#                    --compile "${ICON_OUTPUT_DIR}"
-#                    --app-icon AppIcon-${icon}
-#                    --enable-on-demand-resources NO
-#                    --development-region en
-#                    --target-device mac
-#                    --platform macosx
-#                    --minimum-deployment-target 10.13
-#                    --output-partial-info-plist /dev/null
-#                    --output-format human-readable-text
-#                    COMMENT "Compiling icon ${icon}"
-#                    COMMAND cp "${ICON_OUTPUT_DIR}/AppIcon-${icon}.icns" "$<TARGET_FILE_DIR:Telegram>/../Resources"
-#            )
-
-            # create resulting Assets.car with all icons
             target_add_resource(Telegram "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon")
             set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon" PROPERTIES
                     XCODE_EXPLICIT_FILE_TYPE "folder.iconcomposer.icon"
