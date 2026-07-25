@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_video_userpic.h"
 
+#include "ayu/ui/ayu_userpic.h"
 #include "core/file_location.h"
 #include "data/data_peer.h"
 #include "data/data_photo.h"
@@ -90,7 +91,12 @@ void VideoUserpic::paintLeft(
 		startReady();
 
 		const auto now = paused ? crl::time(0) : crl::now();
-		p.drawImage(x, y, _video->current(request(size), now));
+		p.drawImage(
+			x,
+			y,
+			AyuUserpic::Round(
+				_video->current(request(size), now),
+				_ayuCornerMasks));
 	} else {
 		_peer->paintUserpicLeft(p, view, x, y, w, size);
 	}
@@ -101,7 +107,7 @@ Media::Clip::FrameRequest VideoUserpic::request(int size) const {
 		.frame = { size, size },
 		.outer = { size, size },
 		.factor = style::DevicePixelRatio(),
-		.radius = ImageRoundRadius::AyuUserpic,
+		.radius = ImageRoundRadius::None,
 	};
 }
 

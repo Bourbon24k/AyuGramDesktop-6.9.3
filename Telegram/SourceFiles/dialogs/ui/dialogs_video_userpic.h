@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "media/clip/media_clip_reader.h"
 
+#include <array>
+
 class Painter;
 
 namespace Data {
@@ -55,6 +57,7 @@ private:
 
 	Media::Clip::ReaderPointer _video;
 	int _lastSize = 0;
+	std::array<QImage, 4> _ayuCornerMasks;
 	std::shared_ptr<Data::PhotoMedia> _videoPhotoMedia;
 	PhotoId _videoPhotoId = 0;
 
