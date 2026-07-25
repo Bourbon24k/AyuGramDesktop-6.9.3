@@ -6,13 +6,13 @@
 
 ## Об этом форке
 
-Это неофициальный форк AyuGram Desktop, поддерживаемый для пересборки `6.9.3`.
+Это неофициальный форк AyuGram Desktop, поддерживаемый для пересборки `7.0.5`.
 
-В нём сохранены функции AyuGram, а базовый исходный код Telegram Desktop обновлён до Telegram Desktop `6.9.3`.
+В нём сохранены функции AyuGram, а базовый исходный код Telegram Desktop обновлён до Telegram Desktop `7.0.5`.
 Также в форке лежат правки сборки для актуальных macOS и Windows toolchain.
 
 Готовые сборки именно этого форка опубликованы в
-[Releases](https://github.com/Bourbon24k/AyuGramDesktop-6.9.3/releases).
+[Releases](https://github.com/Bourbon24k/AyuGramDesktop-7.0.5/releases).
 За официальными релизами и поддержкой AyuGram нужно обращаться в upstream-репозиторий AyuGram.
 
 ## Функции и Фишки

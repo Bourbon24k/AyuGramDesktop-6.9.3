@@ -1,4 +1,4 @@
-name: Windows release build
+name: AyuGram Desktop 7.0.5 Windows build
 
 on:
   workflow_dispatch:

@@ -1,5 +1,6 @@
 7.0.5 (23.07.26)
 
+- Rebase the AyuGram Desktop fork on Telegram Desktop 7.0.5 while retaining AyuGram features.
 - Improve slideshow preload / animation / swipes in rich messages.
 - Fix stories leaving empty space on chats list top.
 - Fix custom emoji frame size in favorite reactions.
