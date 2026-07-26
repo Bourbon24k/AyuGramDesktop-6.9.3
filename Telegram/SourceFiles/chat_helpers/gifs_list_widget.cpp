@@ -532,7 +532,6 @@ void GifsListWidget::selectInlineResult(
 						.document = document,
 						.options = options,
 						.messageSendingFrom = from,
-						.caption = std::move(caption),
 						.needsCaption = needsCaption,
 					});
 				});

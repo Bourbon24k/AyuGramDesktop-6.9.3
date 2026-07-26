@@ -1284,7 +1284,6 @@ Element::Element(
 		AddComponents(EphemeralBadge::Bit());
 	}
 	const auto deletedOpacityEnabled
-	const auto deletedOpacityEnabled
 		= AyuSettings::getInstance().semiTransparentDeletedMessages();
 	if (deletedOpacityEnabled
 		&& replacing

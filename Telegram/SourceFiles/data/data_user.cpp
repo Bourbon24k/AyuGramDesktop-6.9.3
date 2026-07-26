@@ -385,7 +385,6 @@ void UserData::setName(
 
 	bool changeName = !filteredFirstName.isEmpty() || !filteredLastName.isEmpty();
 
-	QString newFullName;
 	if (changeName && filteredFirstName.trimmed().isEmpty()) {
 		firstName = filteredLastName;
 		lastName = QString();
