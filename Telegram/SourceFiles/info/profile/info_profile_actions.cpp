@@ -1853,7 +1853,7 @@ Section DetailsFiller::makeInfo() {
 				user
 			) | rpl::map([](TextWithEntities &&text)
 			{
-				return Ui::Text::Code(text.text);
+				return Ui::Text::Wrapped(std::move(text), EntityType::Code);
 			});
 			auto idInfo = addInfoOneLine(
 				rpl::single(idLabel),
@@ -2000,7 +2000,7 @@ Section DetailsFiller::makeInfo() {
 				_peer
 			) | rpl::map([](TextWithEntities &&text)
 			{
-				return Ui::Text::Code(text.text);
+				return Ui::Text::Wrapped(std::move(text), EntityType::Code);
 			});
 			auto idInfo = addInfoOneLine(
 				idLabel,
@@ -2025,7 +2025,7 @@ Section DetailsFiller::makeInfo() {
 				_peer->forumTopicFor(topicRootId)->topicRootId()
 			) | rpl::map([](TextWithEntities &&text)
 			{
-				return Ui::Text::Code(text.text);
+				return Ui::Text::Wrapped(std::move(text), EntityType::Code);
 			});
 			auto idInfo = addInfoOneLine(
 				rpl::single(QString("ID")),
