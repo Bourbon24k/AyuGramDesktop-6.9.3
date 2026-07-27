@@ -8,7 +8,6 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 
 #ifdef Q_OS_WIN
 
-#include "base/platform/base_platform_info.h"
 #include "base/platform/win/base_windows_winrt.h"
 
 #include <QtCore/QDir>
@@ -18,6 +17,7 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #include <QtWidgets/QWidget>
 
 #include <windows.h>
+#include <VersionHelpers.h>
 #include <wincrypt.h>
 #include <winrt/Windows.Security.Credentials.UI.h>
 
@@ -82,6 +82,11 @@ void Complete(
 			callback(available);
 		}
 	});
+}
+
+[[nodiscard]] bool SupportsConsentInterop() {
+	return base::WinRT::Supported()
+		&& IsWindowsVersionOrGreater(10, 0, 22000);
 }
 
 #if AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
@@ -198,8 +203,7 @@ public:
 		using namespace winrt::Windows::Security::Credentials::UI;
 		if (!parent
 			|| !context
-			|| !Platform::IsWindows11OrGreater()
-			|| !base::WinRT::Supported()) {
+			|| !SupportsConsentInterop()) {
 			Complete(std::move(context), std::move(callback), VaultResult::Unavailable);
 			return;
 		}
@@ -282,8 +286,7 @@ public:
 	#else
 		using namespace winrt::Windows::Security::Credentials::UI;
 		if (!context
-			|| !Platform::IsWindows11OrGreater()
-			|| !base::WinRT::Supported()) {
+			|| !SupportsConsentInterop()) {
 			Complete(std::move(context), std::move(callback), false);
 			return;
 		}
