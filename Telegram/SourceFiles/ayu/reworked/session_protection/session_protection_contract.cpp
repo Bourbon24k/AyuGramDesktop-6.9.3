@@ -6,19 +6,13 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/session_protection/session_protection_contract.h"
 
-#include "core/application.h"
-
-#include <QGuiApplication>
+#include "storage/storage_domain.h"
 
 namespace Reworked::SessionProtection {
 
 CompatibilityIdentity CurrentCompatibilityIdentity() {
 	return {
-		.profileDirectory = cWorkingDir() + u"tdata/"_q,
-		.bundleIdentifier = QGuiApplication::desktopFileName().section(
-			u"._"_q,
-			0,
-			0),
+		.profileDirectory = Storage::GlobalDataPath(),
 	};
 }
 

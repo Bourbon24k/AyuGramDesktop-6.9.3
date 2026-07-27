@@ -16,13 +16,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/random.h"
 
 namespace Storage {
+
+QString GlobalDataPath() {
+	return cWorkingDir() + u"tdata/"_q;
+}
+
 namespace {
 
 using namespace details;
-
-[[nodiscard]] QString BaseGlobalPath() {
-	return cWorkingDir() + u"tdata/"_q;
-}
 
 [[nodiscard]] QString ComputeKeyName(const QString &dataName) {
 	// We dropped old test authorizations when migrated to multi auth.
@@ -119,7 +120,7 @@ Domain::StartModernResult Domain::startModern(
 	const auto name = ComputeKeyName(_dataName);
 
 	FileReadDescriptor keyData;
-	if (!ReadFile(keyData, name, BaseGlobalPath())) {
+	if (!ReadFile(keyData, name, GlobalDataPath())) {
 		return StartModernResult::Empty;
 	}
 	LOG(("App Info: reading accounts info..."));
@@ -215,7 +216,7 @@ Domain::StartModernResult Domain::startModern(
 void Domain::writeAccounts() {
 	Expects(!_owner->accounts().empty());
 
-	const auto path = BaseGlobalPath();
+	const auto path = GlobalDataPath();
 	if (!QDir().exists(path)) {
 		QDir().mkpath(path);
 	}

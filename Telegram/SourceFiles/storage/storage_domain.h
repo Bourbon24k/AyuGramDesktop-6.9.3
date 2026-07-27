@@ -20,6 +20,8 @@ class Domain;
 
 namespace Storage {
 
+[[nodiscard]] QString GlobalDataPath();
+
 enum class StartResult : uchar {
 	Success,
 	IncorrectPasscode,

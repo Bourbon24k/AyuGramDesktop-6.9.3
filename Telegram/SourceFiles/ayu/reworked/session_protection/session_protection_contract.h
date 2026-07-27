@@ -10,9 +10,14 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 
 namespace Reworked::SessionProtection {
 
+enum class ApplicationIdentityPolicy {
+	Preserve,
+};
+
 struct CompatibilityIdentity {
 	QString profileDirectory;
-	QString bundleIdentifier;
+	ApplicationIdentityPolicy applicationIdentityPolicy
+		= ApplicationIdentityPolicy::Preserve;
 };
 
 [[nodiscard]] CompatibilityIdentity CurrentCompatibilityIdentity();
