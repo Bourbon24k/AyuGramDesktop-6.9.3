@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 
 #include "ayu/reworked/session_protection/session_protection_platform.h"
+#include "ayu/reworked/connectivity/connectivity_controller.h"
 #include "data/data_abstract_structure.h"
 #include "data/data_channel.h"
 #include "data/data_forum.h"
@@ -156,6 +157,7 @@ struct Application::Private {
 	UiIntegration uiIntegration;
 	Settings settings;
 	std::unique_ptr<ProxyRotationManager> proxyRotation;
+	std::unique_ptr<Reworked::Connectivity::Controller> connectivity;
 	std::shared_ptr<Reworked::SessionProtection::Vault> sessionProtectionVault;
 };
 
@@ -185,6 +187,29 @@ Application::Application()
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
 	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
+	_private->connectivity = std::make_unique<Reworked::Connectivity::Controller>(
+		Reworked::Connectivity::CreateUnavailableHelper(),
+		[=](const MTP::ProxyData &proxy) {
+			setCurrentProxy(
+				proxy,
+				MTP::ProxyData::Settings::Enabled,
+				true);
+		},
+		[=] {
+			setCurrentProxy(
+				MTP::ProxyData(),
+				MTP::ProxyData::Settings::Disabled,
+				true);
+		},
+		[=](bool enabled) {
+			_private->settings.proxy().setReworkedConnectivityEnabled(enabled);
+			saveSettingsDelayed();
+		},
+		[=](Reworked::Connectivity::FailurePhase phase) {
+			_private->settings.proxy().setReworkedConnectivityFailurePhase(
+				uchar(phase));
+			saveSettingsDelayed();
+		});
 	_private->sessionProtectionVault
 		= Reworked::SessionProtection::CreatePlatformVault();
 	Reworked::SessionProtection::SetVault(_private->sessionProtectionVault);
@@ -252,6 +277,7 @@ Application::~Application() {
 
 	Reworked::SessionProtection::SetVault(nullptr);
 	_private->sessionProtectionVault.reset();
+	_private->connectivity.reset();
 	_private->proxyRotation = nullptr;
 	_domain->finish();
 
@@ -288,6 +314,8 @@ void Application::run() {
 	ValidateScale();
 
 	refreshGlobalProxy(); // Depends on app settings being read.
+	_private->connectivity->start(
+		settings().proxy().reworkedConnectivityEnabled());
 
 	if (const auto old = Local::oldSettingsVersion(); old < AppVersion) {
 		autoRegisterUrlScheme();
@@ -847,14 +875,23 @@ void Application::constructFallbackProductionConfig(
 
 void Application::setCurrentProxy(
 		const MTP::ProxyData &proxy,
-		MTP::ProxyData::Settings settings) {
+		MTP::ProxyData::Settings settings,
+		bool reworkedConnectivity) {
 	auto &my = _private->settings.proxy();
 	const auto current = [&] {
 		return my.isEnabled() ? my.selected() : MTP::ProxyData();
 	};
 	const auto was = current();
-	my.setSelected(proxy);
-	my.setSettings(settings);
+	if (reworkedConnectivity) {
+		if (proxy.valid()) {
+			my.setReworkedConnectivityProxy(proxy);
+		} else {
+			my.clearReworkedConnectivityProxy();
+		}
+	} else {
+		my.setSelected(proxy);
+		my.setSettings(settings);
+	}
 	const auto now = current();
 	refreshGlobalProxy();
 	_proxyChanges.fire({ was, now });

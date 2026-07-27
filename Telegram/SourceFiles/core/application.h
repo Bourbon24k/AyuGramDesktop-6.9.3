@@ -219,7 +219,8 @@ public:
 	void constructFallbackProductionConfig(const QByteArray &serialized);
 	void setCurrentProxy(
 		const MTP::ProxyData &proxy,
-		MTP::ProxyData::Settings settings);
+		MTP::ProxyData::Settings settings,
+		bool reworkedConnectivity = false);
 	void proxyRotationSettingsChanged();
 	void checkProxyRotation(not_null<Main::Account*> account, int32 state);
 	[[nodiscard]] rpl::producer<ProxyChange> proxyChanges() const;

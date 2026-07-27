@@ -98,6 +98,8 @@ PRIVATE
 )
 
 set(ayugram_files
+        ayu/reworked/connectivity/connectivity_controller.cpp
+        ayu/reworked/connectivity/connectivity_controller.h
         ayu/reworked/session_protection/session_protection.cpp
         ayu/reworked/session_protection/session_protection.h
         ayu/reworked/session_protection/session_protection_contract.cpp

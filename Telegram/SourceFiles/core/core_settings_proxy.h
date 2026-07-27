@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtproto_proxy_data.h"
 
 #include <array>
+#include <optional>
 
 namespace Core {
 
@@ -51,6 +52,13 @@ public:
 
 	[[nodiscard]] MTP::ProxyData selected() const;
 	void setSelected(MTP::ProxyData value);
+	void setReworkedConnectivityProxy(MTP::ProxyData value);
+	void clearReworkedConnectivityProxy();
+
+	[[nodiscard]] bool reworkedConnectivityEnabled() const;
+	void setReworkedConnectivityEnabled(bool value);
+	[[nodiscard]] uchar reworkedConnectivityFailurePhase() const;
+	void setReworkedConnectivityFailurePhase(uchar value);
 
 	[[nodiscard]] bool checkIpWarningShown() const;
 	void setCheckIpWarningShown(bool value);
@@ -81,6 +89,9 @@ private:
 	int _proxyRotationTimeout = kDefaultProxyRotationTimeout;
 	MTP::ProxyData::Settings _settings = MTP::ProxyData::Settings::System;
 	MTP::ProxyData _selected;
+	std::optional<MTP::ProxyData> _reworkedConnectivityProxy;
+	bool _reworkedConnectivityEnabled = true;
+	uchar _reworkedConnectivityFailurePhase = 0;
 	std::vector<MTP::ProxyData> _list;
 	std::vector<int> _proxyRotationPreferredIndices;
 

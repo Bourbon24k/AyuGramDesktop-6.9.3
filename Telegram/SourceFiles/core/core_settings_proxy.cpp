@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/serialize_common.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace Core {
 namespace {
@@ -126,7 +127,7 @@ QByteArray SettingsProxy::serialize() const {
 			0,
 			ranges::plus(),
 			&Serialize::bytearraySize)
-		+ (4 + int(_proxyRotationPreferredIndices.size())) * sizeof(qint32);
+		+ (6 + int(_proxyRotationPreferredIndices.size())) * sizeof(qint32);
 	auto stream = Serialize::ByteArrayWriter(size);
 	stream
 		<< qint32(_tryIPv6 ? 1 : 0)
@@ -145,6 +146,9 @@ QByteArray SettingsProxy::serialize() const {
 	for (const auto index : _proxyRotationPreferredIndices) {
 		stream << qint32(index);
 	}
+	stream
+		<< qint32(_reworkedConnectivityEnabled ? 1 : 0)
+		<< qint32(_reworkedConnectivityFailurePhase);
 	return std::move(stream).result();
 }
 
@@ -210,6 +214,14 @@ bool SettingsProxy::setFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
+	auto reworkedConnectivityEnabled = qint32(1);
+	if (!stream.atEnd()) {
+		stream >> reworkedConnectivityEnabled;
+	}
+	auto reworkedConnectivityFailurePhase = qint32(0);
+	if (!stream.atEnd()) {
+		stream >> reworkedConnectivityFailurePhase;
+	}
 
 	if (!stream.ok()) {
 		LOG(("App Error: "
@@ -226,20 +238,28 @@ bool SettingsProxy::setFromSerialized(const QByteArray &serialized) {
 	_selected = DeserializeProxyData(selectedProxy);
 	_list = std::move(list);
 	setProxyRotationPreferredIndices(std::move(preferredIndices));
+	_reworkedConnectivityEnabled = (reworkedConnectivityEnabled == 1);
+	_reworkedConnectivityFailurePhase = uchar(std::clamp(
+		reworkedConnectivityFailurePhase,
+		qint32(0),
+		qint32(std::numeric_limits<uchar>::max())));
 
 	return true;
 }
 
 bool SettingsProxy::isEnabled() const {
-	return _settings == MTP::ProxyData::Settings::Enabled;
+	return _reworkedConnectivityProxy.has_value()
+		|| _settings == MTP::ProxyData::Settings::Enabled;
 }
 
 bool SettingsProxy::isSystem() const {
-	return _settings == MTP::ProxyData::Settings::System;
+	return !_reworkedConnectivityProxy.has_value()
+		&& _settings == MTP::ProxyData::Settings::System;
 }
 
 bool SettingsProxy::isDisabled() const {
-	return _settings == MTP::ProxyData::Settings::Disabled;
+	return !_reworkedConnectivityProxy.has_value()
+		&& _settings == MTP::ProxyData::Settings::Disabled;
 }
 
 bool SettingsProxy::checkIpWarningShown() const {
@@ -311,7 +331,9 @@ void SettingsProxy::setProxyRotationTimeout(int value) {
 }
 
 MTP::ProxyData::Settings SettingsProxy::settings() const {
-	return _settings;
+	return _reworkedConnectivityProxy.has_value()
+		? MTP::ProxyData::Settings::Enabled
+		: _settings;
 }
 
 void SettingsProxy::setSettings(MTP::ProxyData::Settings value) {
@@ -319,11 +341,35 @@ void SettingsProxy::setSettings(MTP::ProxyData::Settings value) {
 }
 
 MTP::ProxyData SettingsProxy::selected() const {
-	return _selected;
+	return _reworkedConnectivityProxy.value_or(_selected);
 }
 
 void SettingsProxy::setSelected(MTP::ProxyData value) {
 	_selected = value;
+}
+
+void SettingsProxy::setReworkedConnectivityProxy(MTP::ProxyData value) {
+	_reworkedConnectivityProxy = std::move(value);
+}
+
+void SettingsProxy::clearReworkedConnectivityProxy() {
+	_reworkedConnectivityProxy.reset();
+}
+
+bool SettingsProxy::reworkedConnectivityEnabled() const {
+	return _reworkedConnectivityEnabled;
+}
+
+void SettingsProxy::setReworkedConnectivityEnabled(bool value) {
+	_reworkedConnectivityEnabled = value;
+}
+
+uchar SettingsProxy::reworkedConnectivityFailurePhase() const {
+	return _reworkedConnectivityFailurePhase;
+}
+
+void SettingsProxy::setReworkedConnectivityFailurePhase(uchar value) {
+	_reworkedConnectivityFailurePhase = value;
 }
 
 const std::vector<MTP::ProxyData> &SettingsProxy::list() const {
