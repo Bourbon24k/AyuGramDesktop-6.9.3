@@ -35,6 +35,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_credits.h"
 #include "styles/style_dialogs.h"
+#include "styles/style_ayu_icons.h"
 
 #include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -549,10 +550,10 @@ void BottomInfo::layoutDateText() {
 		})).append("  ");
 	}
 	if (_data.ayuBurnt) {
-		marked.append(Ui::Text::IconEmoji(&::burntIcon)).append(' ');
+		marked.append(Ui::Text::IconEmoji(&st::burntIcon)).append(' ');
 	}
 	if (_data.ayuDeleted && settings.replaceBottomInfoWithIcons()) {
-		marked.append(Ui::Text::IconEmoji(&::deletedIcon)).append(' ');
+		marked.append(Ui::Text::IconEmoji(&st::deletedIcon)).append(' ');
 	}
 	marked.append(full);
 	_authorEditedDate.setMarkedText(
