@@ -986,6 +986,12 @@ public:
 	void setSystemUnlockEnabled(bool enabled) {
 		_systemUnlockEnabled = enabled;
 	}
+	[[nodiscard]] bool sessionProtectionStrongAuthEnabled() const {
+		return _sessionProtectionStrongAuthEnabled;
+	}
+	void setSessionProtectionStrongAuthEnabled(bool enabled) {
+		_sessionProtectionStrongAuthEnabled = enabled;
+	}
 
 	[[nodiscard]] std::optional<bool> weatherInCelsius() const {
 		return _weatherInCelsius;
@@ -1205,6 +1211,7 @@ private:
 	WindowPosition _callPanelPosition;
 	QString _customFontFamily;
 	bool _systemUnlockEnabled = false;
+	bool _sessionProtectionStrongAuthEnabled = false;
 	std::optional<bool> _weatherInCelsius;
 	QByteArray _tonsiteStorageToken;
 	rpl::variable<int> _ivZoom = 0;
@@ -1237,4 +1244,3 @@ private:
 };
 
 } // namespace Core
-

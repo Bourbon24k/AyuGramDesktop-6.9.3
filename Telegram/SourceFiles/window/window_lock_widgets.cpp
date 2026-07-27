@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_info.h"
 #include "base/call_delayed.h"
 #include "base/system_unlock.h"
+#include "ayu/reworked/session_protection/session_protection.h"
 #include "lang/lang_keys.h"
 #include "storage/storage_domain.h"
 #include "mainwindow.h"
@@ -40,6 +41,18 @@ constexpr auto kSystemUnlockDelay = crl::time(1000);
 	case Storage::StartResult::SessionProtectionUnavailable:
 		return tr::lng_session_protection_unavailable(tr::now);
 	case Storage::StartResult::SessionProtectionDenied:
+		return tr::lng_session_protection_denied(tr::now);
+	default:
+		return tr::lng_session_protection_corrupt(tr::now);
+	}
+}
+
+[[nodiscard]] QString SessionProtectionError(
+		Reworked::SessionProtection::VaultResult result) {
+	switch (result) {
+	case Reworked::SessionProtection::VaultResult::Unavailable:
+		return tr::lng_session_protection_unavailable(tr::now);
+	case Reworked::SessionProtection::VaultResult::Denied:
 		return tr::lng_session_protection_denied(tr::now);
 	default:
 		return tr::lng_session_protection_corrupt(tr::now);
@@ -268,6 +281,9 @@ void PasscodeLockWidget::paintContent(QPainter &p) {
 }
 
 void PasscodeLockWidget::submit() {
+	if (_sessionProtectionAuthenticationPending) {
+		return;
+	}
 	if (_passcode->text().isEmpty()) {
 		_passcode->showError();
 		return;
@@ -287,6 +303,11 @@ void PasscodeLockWidget::submit() {
 			: Storage::StartResult::IncorrectPasscode)
 		: domain.start(passcode);
 	if (result == Storage::StartResult::Success) {
+		if (domain.local().sessionProtectionEnabled()
+			&& Core::App().settings().sessionProtectionStrongAuthEnabled()) {
+			authenticateSessionProtection();
+			return;
+		}
 		Core::App().unlockPasscode(); // Destroys this widget.
 		return;
 	}
@@ -298,6 +319,36 @@ void PasscodeLockWidget::submit() {
 		return;
 	}
 	_error = SessionProtectionError(result);
+	_passcode->showError();
+	update();
+}
+
+void PasscodeLockWidget::authenticateSessionProtection() {
+	_sessionProtectionAuthenticationPending = true;
+	_passcode->setDisabled(true);
+	_submit->setDisabled(true);
+	const auto weak = base::make_weak(this);
+	Reworked::SessionProtection::AuthenticateVaultUser(
+		QPointer<QWidget>(this),
+		this,
+		[weak](Reworked::SessionProtection::VaultResult result) {
+			if (const auto strong = weak.get()) {
+				strong->sessionProtectionAuthenticationDone(result);
+			}
+		});
+}
+
+void PasscodeLockWidget::sessionProtectionAuthenticationDone(
+		Reworked::SessionProtection::VaultResult result) {
+	_sessionProtectionAuthenticationPending = false;
+	if (result == Reworked::SessionProtection::VaultResult::Success) {
+		Core::App().unlockPasscode();
+		return;
+	}
+	_passcode->setDisabled(false);
+	_submit->setDisabled(false);
+	_error = SessionProtectionError(result);
+	_passcode->setFocusFast();
 	_passcode->showError();
 	update();
 }

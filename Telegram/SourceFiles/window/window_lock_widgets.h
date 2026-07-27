@@ -17,6 +17,10 @@ namespace base {
 enum class SystemUnlockResult;
 } // namespace base
 
+namespace Reworked::SessionProtection {
+enum class VaultResult : uchar;
+} // namespace Reworked::SessionProtection
+
 namespace Ui {
 class PasswordInput;
 class LinkButton;
@@ -78,6 +82,9 @@ private:
 	void setupSystemUnlock();
 	void suggestSystemUnlock();
 	void systemUnlockDone(base::SystemUnlockResult result);
+	void authenticateSessionProtection();
+	void sessionProtectionAuthenticationDone(
+		Reworked::SessionProtection::VaultResult result);
 	void changed();
 	void submit();
 	void error();
@@ -91,6 +98,7 @@ private:
 
 	rpl::lifetime _systemUnlockSuggested;
 	base::Timer _systemUnlockCooldown;
+	bool _sessionProtectionAuthenticationPending = false;
 
 };
 

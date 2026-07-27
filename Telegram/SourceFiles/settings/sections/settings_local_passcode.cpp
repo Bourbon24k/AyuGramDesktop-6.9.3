@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
 #include "base/system_unlock.h"
+#include "ayu/reworked/session_protection/session_protection.h"
 #include "boxes/auto_lock_box.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -65,6 +66,87 @@ using namespace Builder;
 	cSetPasscodeBadTries(0);
 	Core::App().localPasscodeChanged();
 	return result;
+}
+
+class SessionProtectionPasscodeBox final : public Ui::BoxContent {
+public:
+	SessionProtectionPasscodeBox(
+		QWidget*,
+		not_null<Window::SessionController*> controller,
+		bool enabling,
+		Fn<void()> done)
+	: _controller(controller)
+	, _enabling(enabling)
+	, _done(std::move(done)) {
+	}
+
+protected:
+	void prepare() override {
+		setTitle(tr::lng_session_protection_title());
+
+		_passcode = Ui::CreateChild<Ui::PasswordInput>(
+			this,
+			st::settingLocalPasscodeInputField,
+			tr::lng_passcode_enter_old());
+		_passcode->resizeToWidth(
+			st::boxWidth - st::boxPadding.left() - st::boxPadding.right());
+		_passcode->moveToLeft(st::boxPadding.left(), st::boxPadding.top());
+		_passcode->submits(
+		) | rpl::on_next([=] { submit(); }, lifetime());
+		addButton(
+			_enabling
+				? tr::lng_session_protection_enable()
+				: tr::lng_session_protection_disable(),
+			[=] { submit(); });
+		addButton(tr::lng_cancel(), [=] { closeBox(); });
+		setDimensions(
+			st::boxWidth,
+			st::boxPadding.top()
+				+ _passcode->height()
+				+ st::boxPadding.bottom());
+	}
+
+	void setInnerFocus() override {
+		_passcode->setFocusFast();
+	}
+
+private:
+	void submit() {
+		const auto passcode = _passcode->text();
+		if (passcode.isEmpty()) {
+			_passcode->showError();
+			return;
+		}
+		const auto result = _enabling
+			? _controller->session().domain().local().enableSessionProtection(
+				passcode.toUtf8())
+			: _controller->session().domain().local().disableSessionProtection(
+				passcode.toUtf8());
+		if (result == Storage::SessionProtectionResult::Success) {
+			_done();
+			closeBox();
+			return;
+		}
+		_passcode->showError();
+		if (result != Storage::SessionProtectionResult::IncorrectPasscode) {
+			_controller->show(Ui::MakeInformBox(SessionProtectionError(result)));
+		}
+	}
+
+	const not_null<Window::SessionController*> _controller;
+	const bool _enabling;
+	const Fn<void()> _done;
+	object_ptr<Ui::PasswordInput> _passcode;
+};
+
+void ShowSessionProtectionPasscodeBox(
+		not_null<Window::SessionController*> controller,
+		bool enabling,
+		Fn<void()> done) {
+	controller->show(Box<SessionProtectionPasscodeBox>(
+		controller,
+		enabling,
+		std::move(done)));
 }
 
 } // namespace
@@ -429,6 +511,9 @@ void BuildManageContent(SectionBuilder &builder) {
 		rpl::event_stream<> autoLockBoxClosing;
 	};
 	const auto state = container->lifetime().make_state<State>();
+	const auto protectionEnabled = container->lifetime().make_state<
+		rpl::variable<bool>
+	>(controller->session().domain().local().sessionProtectionEnabled());
 
 	builder.addSkip();
 
@@ -479,6 +564,79 @@ void BuildManageContent(SectionBuilder &builder) {
 	}
 
 	builder.addSkip();
+
+	const auto protectionButton = builder.addButton({
+		.id = u"passcode/session-protection"_q,
+		.title = tr::lng_session_protection_title(),
+		.icon = { &st::menuIconLock },
+		.toggled = protectionEnabled->value(),
+		.keywords = { u"security"_q, u"vault"_q, u"protection"_q },
+	});
+	if (protectionButton) {
+		protectionButton->toggledChanges(
+		) | rpl::filter([=](bool enabling) {
+			return enabling != protectionEnabled->current();
+		}) | rpl::on_next([=](bool enabling) {
+			const auto proceed = [=](Fn<void()> &&close) {
+				ShowSessionProtectionPasscodeBox(
+					controller,
+					enabling,
+					[=] {
+						protectionEnabled->force_assign(enabling);
+						close();
+					});
+			};
+			controller->show(Ui::MakeConfirmBox({
+				.text = enabling
+					? tr::lng_session_protection_enable_sure()
+					: tr::lng_session_protection_disable_sure(),
+				.confirmed = std::move(proceed),
+				.confirmText = enabling
+					? tr::lng_session_protection_enable()
+					: tr::lng_session_protection_disable(),
+				.confirmStyle = enabling ? nullptr : &st::attentionBoxButton,
+			}));
+			protectionEnabled->force_assign(!enabling);
+		}, container->lifetime());
+	}
+
+	builder.add([=](const WidgetContext &ctx) {
+		const auto content = ctx.container->add(
+			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+				ctx.container,
+				object_ptr<Ui::VerticalLayout>(ctx.container))
+		)->setDuration(0);
+		const auto inner = content->entity();
+		const auto available = inner->lifetime().make_state<
+			rpl::variable<bool>
+		>(false);
+		Reworked::SessionProtection::CanAuthenticateVaultUser(
+			QPointer<QObject>(inner.get()),
+			[available](bool value) { available->force_assign(value); });
+		const auto button = AddButtonWithIcon(
+			inner,
+			tr::lng_session_protection_strong_auth(),
+			st::settingsButton,
+			{ &st::menuIconLock });
+		button->toggleOn(rpl::single(
+			Core::App().settings().sessionProtectionStrongAuthEnabled()));
+		button->toggledChanges(
+		) | rpl::on_next([=](bool enabled) {
+			Core::App().settings().setSessionProtectionStrongAuthEnabled(enabled);
+			Core::App().saveSettingsDelayed();
+		}, inner->lifetime());
+		Ui::AddSkip(inner);
+		Ui::AddDividerText(
+			inner,
+			tr::lng_session_protection_strong_auth_about());
+		content->toggleOn(rpl::combine(
+			available->value(),
+			protectionEnabled->value()
+		) | rpl::map([](bool canAuthenticate, bool enabled) {
+			return canAuthenticate && enabled;
+		}));
+		return SectionBuilder::WidgetToAdd{};
+	});
 
 	using Divider = CloudPassword::OneEdgeBoxContentDivider;
 	builder.add([](const WidgetContext &ctx) {

@@ -1203,6 +1203,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_session_protection_denied" = "Allow access to the system vault, then try again.";
 "lng_session_protection_corrupt" = "Session protection data could not be verified. Your local passcode was not changed.";
 "lng_session_protection_disable_first" = "Disable Session Protection with your current passcode before removing the local passcode.";
+"lng_session_protection_title" = "Session Protection";
+"lng_session_protection_enable" = "Enable";
+"lng_session_protection_disable" = "Disable";
+"lng_session_protection_enable_sure" = "Protect this session with the system vault? You will need your current local passcode to continue.";
+"lng_session_protection_disable_sure" = "Disable Session Protection? You will need your current local passcode and access to the system vault to continue.";
+"lng_session_protection_strong_auth" = "Require system authentication";
+"lng_session_protection_strong_auth_about" = "After entering your local passcode, confirm with system authentication before unlocking.";
 "lng_passcode_enter" = "Enter your local passcode";
 "lng_passcode_ph" = "Your passcode";
 "lng_passcode_submit" = "Submit";
