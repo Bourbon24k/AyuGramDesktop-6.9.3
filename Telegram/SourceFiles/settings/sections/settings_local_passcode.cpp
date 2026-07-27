@@ -7,10 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_local_passcode.h"
 
+#include "ayu/reworked/session_protection/session_protection.h"
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
 #include "base/system_unlock.h"
-#include "ayu/reworked/session_protection/session_protection.h"
 #include "boxes/auto_lock_box.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -20,11 +20,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "settings/cloud_password/settings_cloud_password_common.h"
 #include "settings/cloud_password/settings_cloud_password_step.h"
+#include "settings/session_protection_box.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 #include "storage/storage_domain.h"
-#include "ui/vertical_list.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/fields/password_input.h"
 #include "ui/widgets/labels.h"
@@ -66,87 +67,6 @@ using namespace Builder;
 	cSetPasscodeBadTries(0);
 	Core::App().localPasscodeChanged();
 	return result;
-}
-
-class SessionProtectionPasscodeBox final : public Ui::BoxContent {
-public:
-	SessionProtectionPasscodeBox(
-		QWidget*,
-		not_null<Window::SessionController*> controller,
-		bool enabling,
-		Fn<void()> done)
-	: _controller(controller)
-	, _enabling(enabling)
-	, _done(std::move(done)) {
-	}
-
-protected:
-	void prepare() override {
-		setTitle(tr::lng_session_protection_title());
-
-		_passcode = Ui::CreateChild<Ui::PasswordInput>(
-			this,
-			st::settingLocalPasscodeInputField,
-			tr::lng_passcode_enter_old());
-		_passcode->resizeToWidth(
-			st::boxWidth - st::boxPadding.left() - st::boxPadding.right());
-		_passcode->moveToLeft(st::boxPadding.left(), st::boxPadding.top());
-		_passcode->submits(
-		) | rpl::on_next([=] { submit(); }, lifetime());
-		addButton(
-			_enabling
-				? tr::lng_session_protection_enable()
-				: tr::lng_session_protection_disable(),
-			[=] { submit(); });
-		addButton(tr::lng_cancel(), [=] { closeBox(); });
-		setDimensions(
-			st::boxWidth,
-			st::boxPadding.top()
-				+ _passcode->height()
-				+ st::boxPadding.bottom());
-	}
-
-	void setInnerFocus() override {
-		_passcode->setFocusFast();
-	}
-
-private:
-	void submit() {
-		const auto passcode = _passcode->text();
-		if (passcode.isEmpty()) {
-			_passcode->showError();
-			return;
-		}
-		const auto result = _enabling
-			? _controller->session().domain().local().enableSessionProtection(
-				passcode.toUtf8())
-			: _controller->session().domain().local().disableSessionProtection(
-				passcode.toUtf8());
-		if (result == Storage::SessionProtectionResult::Success) {
-			_done();
-			closeBox();
-			return;
-		}
-		_passcode->showError();
-		if (result != Storage::SessionProtectionResult::IncorrectPasscode) {
-			_controller->show(Ui::MakeInformBox(SessionProtectionError(result)));
-		}
-	}
-
-	const not_null<Window::SessionController*> _controller;
-	const bool _enabling;
-	const Fn<void()> _done;
-	object_ptr<Ui::PasswordInput> _passcode;
-};
-
-void ShowSessionProtectionPasscodeBox(
-		not_null<Window::SessionController*> controller,
-		bool enabling,
-		Fn<void()> done) {
-	controller->show(Box<SessionProtectionPasscodeBox>(
-		controller,
-		enabling,
-		std::move(done)));
 }
 
 } // namespace
