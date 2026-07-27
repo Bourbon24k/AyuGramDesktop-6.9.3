@@ -6,7 +6,6 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #pragma once
 
-#include "base/functional.h"
 #include "base/timer.h"
 #include "mtproto/mtproto_proxy_data.h"
 

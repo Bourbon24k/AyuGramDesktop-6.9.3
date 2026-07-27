@@ -7,8 +7,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include "base/functional.h"
-
 namespace Window {
 class SessionController;
 } // namespace Window

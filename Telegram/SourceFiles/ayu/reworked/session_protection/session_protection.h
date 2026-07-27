@@ -7,7 +7,6 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #pragma once
 
 #include "ayu/reworked/session_protection/session_protection_contract.h"
-#include "base/functional.h"
 
 #include <QtCore/QPointer>
 
