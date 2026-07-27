@@ -124,6 +124,10 @@ QString SingleInstanceLocalServerName(const QString &hash) {
 #endif // OS_MAC_STORE
 }
 
+QString PersistentApplicationIdentifier() {
+	return NS2QString([[NSBundle mainBundle] bundleIdentifier]);
+}
+
 #if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
 namespace {
 

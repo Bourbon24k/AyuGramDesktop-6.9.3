@@ -604,6 +604,10 @@ QString SingleInstanceLocalServerName(const QString &hash) {
 #endif // !Q_OS_LINUX || Qt < 6.2.0
 }
 
+QString PersistentApplicationIdentifier() {
+	return QGuiApplication::desktopFileName();
+}
+
 #if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
 std::optional<bool> IsDarkMode() {
 	auto result = base::Platform::XDP::ReadSetting(

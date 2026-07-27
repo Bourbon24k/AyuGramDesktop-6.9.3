@@ -383,6 +383,10 @@ void start() {
 void finish() {
 }
 
+QString PersistentApplicationIdentifier() {
+	return QString::fromStdWString(AppUserModelId::Id());
+}
+
 void SetApplicationIcon(const QIcon &icon) {
 	QApplication::setWindowIcon(icon);
 }
