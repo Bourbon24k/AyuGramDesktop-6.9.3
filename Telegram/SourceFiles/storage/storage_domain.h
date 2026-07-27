@@ -26,6 +26,18 @@ enum class StartResult : uchar {
 	Success,
 	IncorrectPasscode,
 	IncorrectPasscodeLegacy,
+	SessionProtectionUnavailable,
+	SessionProtectionDenied,
+	SessionProtectionCorrupt,
+};
+
+enum class SessionProtectionResult : uchar {
+	Success,
+	NotEnabled,
+	IncorrectPasscode,
+	Unavailable,
+	Denied,
+	Corrupt,
 };
 
 class Domain final {
@@ -42,6 +54,11 @@ public:
 
 	[[nodiscard]] bool checkPasscode(const QByteArray &passcode) const;
 	void setPasscode(const QByteArray &passcode);
+	[[nodiscard]] SessionProtectionResult enableSessionProtection(
+		const QByteArray &passcode);
+	[[nodiscard]] SessionProtectionResult disableSessionProtection(
+		const QByteArray &passcode);
+	[[nodiscard]] bool sessionProtectionEnabled() const;
 
 	[[nodiscard]] int oldVersion() const;
 	void clearOldVersion();
@@ -53,8 +70,16 @@ private:
 	enum class StartModernResult {
 		Success,
 		IncorrectPasscode,
+		SessionProtectionUnavailable,
+		SessionProtectionDenied,
+		SessionProtectionCorrupt,
 		Failed,
 		Empty,
+	};
+
+	enum class LocalKeyEnvelope {
+		Legacy,
+		SessionProtectionV1,
 	};
 
 	[[nodiscard]] StartModernResult startModern(const QByteArray &passcode);
@@ -63,6 +88,9 @@ private:
 		std::unique_ptr<Main::Account> account);
 	void generateLocalKey();
 	void encryptLocalKey(const QByteArray &passcode);
+	[[nodiscard]] SessionProtectionResult encryptSessionProtectedLocalKey(
+		const QByteArray &passcode,
+		const QByteArray &vaultSecret);
 
 	const not_null<Main::Domain*> _owner;
 	const QString _dataName;
@@ -71,6 +99,7 @@ private:
 	MTP::AuthKeyPtr _passcodeKey;
 	QByteArray _passcodeKeySalt;
 	QByteArray _passcodeKeyEncrypted;
+	LocalKeyEnvelope _localKeyEnvelope = LocalKeyEnvelope::Legacy;
 	int _oldVersion = 0;
 
 	bool _hasLocalPasscode = false;

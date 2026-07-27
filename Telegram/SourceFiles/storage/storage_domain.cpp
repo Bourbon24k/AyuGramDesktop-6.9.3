@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "storage/storage_domain.h"
 
+#include "ayu/reworked/session_protection/session_protection.h"
 #include "core/version.h"
 #include "storage/details/storage_file_utilities.h"
 #include "storage/serialize_common.h"
@@ -14,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_domain.h"
 #include "main/main_account.h"
 #include "base/random.h"
+
+#include <QtCore/QCryptographicHash>
 
 namespace Storage {
 
@@ -24,11 +27,60 @@ QString GlobalDataPath() {
 namespace {
 
 using namespace details;
+namespace SessionProtection = Reworked::SessionProtection;
+
+constexpr auto kVaultSecretSize = 32;
 
 [[nodiscard]] QString ComputeKeyName(const QString &dataName) {
 	// We dropped old test authorizations when migrated to multi auth.
 	//return "key_" + dataName + (cTestMode() ? "[test]" : "");
 	return "key_" + dataName;
+}
+
+[[nodiscard]] SessionProtectionResult VaultResultToSessionProtectionResult(
+		SessionProtection::VaultResult result) {
+	switch (result) {
+	case SessionProtection::VaultResult::Success:
+		return SessionProtectionResult::Success;
+	case SessionProtection::VaultResult::Unavailable:
+		return SessionProtectionResult::Unavailable;
+	case SessionProtection::VaultResult::Denied:
+		return SessionProtectionResult::Denied;
+	case SessionProtection::VaultResult::Corrupt:
+		return SessionProtectionResult::Corrupt;
+	}
+	Unexpected("Vault result.");
+}
+
+[[nodiscard]] MTP::AuthKeyPtr CreateSessionProtectionKey(
+		const QByteArray &passcode,
+		const QByteArray &vaultSecret,
+		const QByteArray &salt) {
+	auto material = QByteArray();
+	auto stream = QDataStream(&material, QIODevice::WriteOnly);
+	stream << passcode << vaultSecret;
+	return CreateLocalKey(
+		QCryptographicHash::hash(material, QCryptographicHash::Sha256),
+		salt);
+}
+
+[[nodiscard]] bool VaultSecretMatchesLocalKey(
+		const QByteArray &passcode,
+		const QByteArray &vaultSecret,
+		const QByteArray &salt,
+		const QByteArray &encrypted,
+		const MTP::AuthKeyPtr &localKey) {
+	auto data = EncryptedDescriptor();
+	if (!DecryptLocal(
+				data,
+				encrypted,
+				CreateSessionProtectionKey(passcode, vaultSecret, salt))) {
+		return false;
+	}
+	const auto key = Serialize::read<MTP::AuthKey::Data>(data.stream);
+	return (data.stream.status() == QDataStream::Ok)
+		&& data.stream.atEnd()
+		&& MTP::AuthKey(key).equals(localKey);
 }
 
 } // namespace
@@ -49,6 +101,12 @@ StartResult Domain::start(const QByteArray &passcode) {
 		return StartResult::Success;
 	} else if (modern == StartModernResult::IncorrectPasscode) {
 		return StartResult::IncorrectPasscode;
+	} else if (modern == StartModernResult::SessionProtectionUnavailable) {
+		return StartResult::SessionProtectionUnavailable;
+	} else if (modern == StartModernResult::SessionProtectionDenied) {
+		return StartResult::SessionProtectionDenied;
+	} else if (modern == StartModernResult::SessionProtectionCorrupt) {
+		return StartResult::SessionProtectionCorrupt;
 	} else if (modern == StartModernResult::Failed) {
 		startFromScratch();
 		return StartResult::Success;
@@ -112,6 +170,7 @@ void Domain::encryptLocalKey(const QByteArray &passcode) {
 	EncryptedDescriptor passKeyData(MTP::AuthKey::kSize);
 	_localKey->write(passKeyData.stream);
 	_passcodeKeyEncrypted = PrepareEncrypted(passKeyData, _passcodeKey);
+	_localKeyEnvelope = LocalKeyEnvelope::Legacy;
 	_hasLocalPasscode = !passcode.isEmpty();
 }
 
@@ -125,10 +184,20 @@ Domain::StartModernResult Domain::startModern(
 	}
 	LOG(("App Info: reading accounts info..."));
 
-	QByteArray salt, keyEncrypted, infoEncrypted;
-	keyData.stream >> salt >> keyEncrypted >> infoEncrypted;
+	QByteArray headerOrSalt, salt, keyEncrypted, infoEncrypted;
+	keyData.stream >> headerOrSalt;
+	const auto envelope = SessionProtection::ParseEnvelopeHeader(headerOrSalt);
+	if (envelope == SessionProtection::EnvelopeVersion::V1) {
+		keyData.stream >> salt >> keyEncrypted >> infoEncrypted;
+	} else {
+		salt = headerOrSalt;
+		keyData.stream >> keyEncrypted >> infoEncrypted;
+	}
 	if (!CheckStreamStatus(keyData.stream)) {
 		return StartModernResult::Failed;
+	}
+	if (envelope == SessionProtection::EnvelopeVersion::Unsupported) {
+		return StartModernResult::SessionProtectionCorrupt;
 	}
 
 	if (salt.size() != LocalEncryptSaltSize) {
@@ -138,7 +207,26 @@ Domain::StartModernResult Domain::startModern(
 	_passcodeKey = CreateLocalKey(passcode, salt);
 
 	EncryptedDescriptor keyInnerData, info;
-	if (!DecryptLocal(keyInnerData, keyEncrypted, _passcodeKey)) {
+	auto wrappingKey = _passcodeKey;
+	if (envelope == SessionProtection::EnvelopeVersion::V1) {
+		auto vaultSecret = QByteArray();
+		const auto vaultResult = SessionProtection::ReadVaultSecret(&vaultSecret);
+		if (vaultResult != SessionProtection::VaultResult::Success) {
+			switch (VaultResultToSessionProtectionResult(vaultResult)) {
+			case SessionProtectionResult::Unavailable:
+				return StartModernResult::SessionProtectionUnavailable;
+			case SessionProtectionResult::Denied:
+				return StartModernResult::SessionProtectionDenied;
+			default:
+				return StartModernResult::SessionProtectionCorrupt;
+			}
+		}
+		if (vaultSecret.size() != kVaultSecretSize) {
+			return StartModernResult::SessionProtectionCorrupt;
+		}
+		wrappingKey = CreateSessionProtectionKey(passcode, vaultSecret, salt);
+	}
+	if (!DecryptLocal(keyInnerData, keyEncrypted, wrappingKey)) {
 		LOG(("App Info: could not decrypt pass-protected key from info file, "
 			"maybe bad password..."));
 		return StartModernResult::IncorrectPasscode;
@@ -153,7 +241,11 @@ Domain::StartModernResult Domain::startModern(
 
 	_passcodeKeyEncrypted = keyEncrypted;
 	_passcodeKeySalt = salt;
-	_hasLocalPasscode = !passcode.isEmpty();
+	_localKeyEnvelope = (envelope == SessionProtection::EnvelopeVersion::V1)
+		? LocalKeyEnvelope::SessionProtectionV1
+		: LocalKeyEnvelope::Legacy;
+	_hasLocalPasscode = (_localKeyEnvelope
+		== LocalKeyEnvelope::SessionProtectionV1) || !passcode.isEmpty();
 
 	if (!DecryptLocal(info, infoEncrypted, _localKey)) {
 		LOG(("App Error: could not decrypt info."));
@@ -222,6 +314,10 @@ void Domain::writeAccounts() {
 	}
 
 	FileWriteDescriptor key(ComputeKeyName(_dataName), path);
+	if (_localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1) {
+		key.writeData(SessionProtection::EnvelopeHeader(
+			SessionProtection::EnvelopeVersion::V1));
+	}
 	key.writeData(_passcodeKeySalt);
 	key.writeData(_passcodeKeyEncrypted);
 
@@ -256,7 +352,19 @@ void Domain::setPasscode(const QByteArray &passcode) {
 	Expects(!_passcodeKeySalt.isEmpty());
 	Expects(_localKey != nullptr);
 
-	encryptLocalKey(passcode);
+	if (_localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1) {
+		auto vaultSecret = QByteArray();
+		if (SessionProtection::ReadVaultSecret(&vaultSecret)
+			!= SessionProtection::VaultResult::Success) {
+			return;
+		}
+		if (encryptSessionProtectedLocalKey(passcode, vaultSecret)
+			!= SessionProtectionResult::Success) {
+			return;
+		}
+	} else {
+		encryptLocalKey(passcode);
+	}
 	writeAccounts();
 
 	_passcodeKeyChanged.fire({});
@@ -276,6 +384,84 @@ rpl::producer<> Domain::localPasscodeChanged() const {
 
 bool Domain::hasLocalPasscode() const {
 	return _hasLocalPasscode;
+}
+
+SessionProtectionResult Domain::encryptSessionProtectedLocalKey(
+		const QByteArray &passcode,
+		const QByteArray &vaultSecret) {
+	if (vaultSecret.size() != kVaultSecretSize) {
+		return SessionProtectionResult::Corrupt;
+	}
+	_passcodeKeySalt.resize(LocalEncryptSaltSize);
+	base::RandomFill(_passcodeKeySalt.data(), _passcodeKeySalt.size());
+	_passcodeKey = CreateLocalKey(passcode, _passcodeKeySalt);
+	const auto wrappingKey = CreateSessionProtectionKey(
+		passcode,
+		vaultSecret,
+		_passcodeKeySalt);
+	EncryptedDescriptor passKeyData(MTP::AuthKey::kSize);
+	_localKey->write(passKeyData.stream);
+	_passcodeKeyEncrypted = PrepareEncrypted(passKeyData, wrappingKey);
+	_localKeyEnvelope = LocalKeyEnvelope::SessionProtectionV1;
+	_hasLocalPasscode = true;
+	return SessionProtectionResult::Success;
+}
+
+SessionProtectionResult Domain::enableSessionProtection(
+		const QByteArray &passcode) {
+	if (_localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1) {
+		return SessionProtectionResult::Success;
+	}
+	if (!_hasLocalPasscode || !checkPasscode(passcode)) {
+		return SessionProtectionResult::IncorrectPasscode;
+	}
+	auto vaultSecret = QByteArray(kVaultSecretSize, Qt::Uninitialized);
+	base::RandomFill(vaultSecret.data(), vaultSecret.size());
+	const auto vaultResult = SessionProtection::WriteVaultSecret(vaultSecret);
+	if (vaultResult != SessionProtection::VaultResult::Success) {
+		return VaultResultToSessionProtectionResult(vaultResult);
+	}
+	const auto result = encryptSessionProtectedLocalKey(passcode, vaultSecret);
+	if (result != SessionProtectionResult::Success) {
+		return result;
+	}
+	writeAccounts();
+	_passcodeKeyChanged.fire({});
+	return SessionProtectionResult::Success;
+}
+
+SessionProtectionResult Domain::disableSessionProtection(
+		const QByteArray &passcode) {
+	if (_localKeyEnvelope != LocalKeyEnvelope::SessionProtectionV1) {
+		return SessionProtectionResult::NotEnabled;
+	}
+	if (!checkPasscode(passcode)) {
+		return SessionProtectionResult::IncorrectPasscode;
+	}
+	auto vaultSecret = QByteArray();
+	const auto vaultResult = SessionProtection::ReadVaultSecret(&vaultSecret);
+	if (vaultResult != SessionProtection::VaultResult::Success) {
+		return VaultResultToSessionProtectionResult(vaultResult);
+	}
+	if (vaultSecret.size() != kVaultSecretSize) {
+		return SessionProtectionResult::Corrupt;
+	}
+	if (!VaultSecretMatchesLocalKey(
+				passcode,
+				vaultSecret,
+				_passcodeKeySalt,
+				_passcodeKeyEncrypted,
+				_localKey)) {
+		return SessionProtectionResult::Corrupt;
+	}
+	encryptLocalKey(passcode);
+	writeAccounts();
+	_passcodeKeyChanged.fire({});
+	return SessionProtectionResult::Success;
+}
+
+bool Domain::sessionProtectionEnabled() const {
+	return _localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1;
 }
 
 } // namespace Storage
