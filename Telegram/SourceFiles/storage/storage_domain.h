@@ -38,6 +38,7 @@ enum class SessionProtectionResult : uchar {
 	Unavailable,
 	Denied,
 	Corrupt,
+	ProtectionMustBeDisabled,
 };
 
 class Domain final {

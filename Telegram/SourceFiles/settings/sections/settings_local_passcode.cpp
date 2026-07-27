@@ -47,6 +47,8 @@ using namespace Builder;
 		return tr::lng_session_protection_unavailable(tr::now);
 	case Storage::SessionProtectionResult::Denied:
 		return tr::lng_session_protection_denied(tr::now);
+	case Storage::SessionProtectionResult::ProtectionMustBeDisabled:
+		return tr::lng_session_protection_disable_first(tr::now);
 	default:
 		return tr::lng_session_protection_corrupt(tr::now);
 	}

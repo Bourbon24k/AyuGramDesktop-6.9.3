@@ -58,6 +58,7 @@ constexpr auto kVaultSecretSize = 32;
 		const QByteArray &salt) {
 	auto material = QByteArray();
 	auto stream = QDataStream(&material, QIODevice::WriteOnly);
+	stream.setVersion(QDataStream::Qt_5_1);
 	stream << passcode << vaultSecret;
 	return CreateLocalKey(
 		QCryptographicHash::hash(material, QCryptographicHash::Sha256),
@@ -353,6 +354,9 @@ SessionProtectionResult Domain::setPasscode(const QByteArray &passcode) {
 	Expects(_localKey != nullptr);
 
 	if (_localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1) {
+		if (passcode.isEmpty()) {
+			return SessionProtectionResult::ProtectionMustBeDisabled;
+		}
 		auto vaultSecret = QByteArray();
 		const auto vaultResult = SessionProtection::ReadVaultSecret(&vaultSecret);
 		if (vaultResult != SessionProtection::VaultResult::Success) {

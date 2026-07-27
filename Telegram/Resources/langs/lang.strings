@@ -1202,6 +1202,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_session_protection_unavailable" = "Session protection is unavailable on this device. Keep the current local passcode and try again.";
 "lng_session_protection_denied" = "Allow access to the system vault, then try again.";
 "lng_session_protection_corrupt" = "Session protection data could not be verified. Your local passcode was not changed.";
+"lng_session_protection_disable_first" = "Disable Session Protection with your current passcode before removing the local passcode.";
 "lng_passcode_enter" = "Enter your local passcode";
 "lng_passcode_ph" = "Your passcode";
 "lng_passcode_submit" = "Submit";
