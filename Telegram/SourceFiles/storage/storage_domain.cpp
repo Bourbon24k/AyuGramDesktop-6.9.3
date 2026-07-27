@@ -187,6 +187,9 @@ Domain::StartModernResult Domain::startModern(
 	QByteArray headerOrSalt, salt, keyEncrypted, infoEncrypted;
 	keyData.stream >> headerOrSalt;
 	const auto envelope = SessionProtection::ParseEnvelopeHeader(headerOrSalt);
+	if (envelope == SessionProtection::EnvelopeVersion::Unsupported) {
+		return StartModernResult::SessionProtectionCorrupt;
+	}
 	if (envelope == SessionProtection::EnvelopeVersion::V1) {
 		keyData.stream >> salt >> keyEncrypted >> infoEncrypted;
 	} else {
@@ -195,9 +198,6 @@ Domain::StartModernResult Domain::startModern(
 	}
 	if (!CheckStreamStatus(keyData.stream)) {
 		return StartModernResult::Failed;
-	}
-	if (envelope == SessionProtection::EnvelopeVersion::Unsupported) {
-		return StartModernResult::SessionProtectionCorrupt;
 	}
 
 	if (salt.size() != LocalEncryptSaltSize) {
