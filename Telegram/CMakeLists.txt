@@ -98,6 +98,8 @@ PRIVATE
 )
 
 set(ayugram_files
+        ayu/reworked/session_protection/session_protection_contract.cpp
+        ayu/reworked/session_protection/session_protection_contract.h
         ayu/ayu_worker.cpp
         ayu/ayu_worker.h
         ayu/ayu_url_handlers.cpp
