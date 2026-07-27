@@ -61,4 +61,25 @@ VaultResult WriteVaultSecret(const QByteArray &secret) {
 	return vault->write(CurrentCompatibilityIdentity(), secret);
 }
 
+VaultResult RemoveVaultSecret() {
+	const auto vault = CurrentVault();
+	if (!vault) {
+		return VaultResult::Unavailable;
+	}
+	return vault->remove(CurrentCompatibilityIdentity());
+}
+
+VaultResult AuthenticateVaultUser() {
+	const auto vault = CurrentVault();
+	if (!vault) {
+		return VaultResult::Unavailable;
+	}
+	return vault->authenticateUser(CurrentCompatibilityIdentity());
+}
+
+bool CanAuthenticateVaultUser() {
+	const auto vault = CurrentVault();
+	return vault && vault->canAuthenticateUser();
+}
+
 } // namespace Reworked::SessionProtection

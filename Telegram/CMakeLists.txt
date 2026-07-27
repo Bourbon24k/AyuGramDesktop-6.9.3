@@ -102,6 +102,11 @@ set(ayugram_files
         ayu/reworked/session_protection/session_protection.h
         ayu/reworked/session_protection/session_protection_contract.cpp
         ayu/reworked/session_protection/session_protection_contract.h
+        ayu/reworked/session_protection/session_protection_platform.cpp
+        ayu/reworked/session_protection/session_protection_platform.h
+        ayu/reworked/session_protection/session_protection_platform_impl.h
+        ayu/reworked/session_protection/session_protection_platform_mac.mm
+        ayu/reworked/session_protection/session_protection_platform_win.cpp
         ayu/ayu_worker.cpp
         ayu/ayu_worker.h
         ayu/ayu_url_handlers.cpp
@@ -2294,6 +2299,11 @@ if (WIN32)
 
     target_link_options(Telegram PRIVATE /PDBPAGESIZE:8192)
 elseif (APPLE)
+    target_link_libraries(Telegram PRIVATE
+        "-framework Security"
+        "-framework LocalAuthentication"
+    )
+
     if (NOT DESKTOP_APP_USE_PACKAGED)
         target_link_libraries(Telegram PRIVATE desktop-app::external_iconv)
     endif()

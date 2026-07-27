@@ -29,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/launcher.h"
 #include "core/proxy_rotation_manager.h"
 #include "core/ui_integration.h"
+#include "ayu/reworked/session_protection/session_protection_platform.h"
 #include "core/version.h"
 #include "chat_helpers/emoji_keywords.h"
 #include "chat_helpers/stickers_emoji_image_loader.h"
@@ -155,6 +156,7 @@ struct Application::Private {
 	UiIntegration uiIntegration;
 	Settings settings;
 	std::unique_ptr<ProxyRotationManager> proxyRotation;
+	std::shared_ptr<Reworked::SessionProtection::Vault> sessionProtectionVault;
 };
 
 Application::Application()
@@ -183,6 +185,9 @@ Application::Application()
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
 	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
+	_private->sessionProtectionVault
+		= Reworked::SessionProtection::CreatePlatformVault();
+	Reworked::SessionProtection::SetVault(_private->sessionProtectionVault);
 
 	_platformIntegration->init();
 
@@ -245,6 +250,8 @@ Application::~Application() {
 	// Domain::finish() and there is a violation on Ensures(started()).
 	closeAdditionalWindows();
 
+	Reworked::SessionProtection::SetVault(nullptr);
+	_private->sessionProtectionVault.reset();
 	_private->proxyRotation = nullptr;
 	_domain->finish();
 

@@ -29,6 +29,11 @@ public:
 	[[nodiscard]] virtual VaultResult write(
 		const CompatibilityIdentity &identity,
 		const QByteArray &secret) = 0;
+	[[nodiscard]] virtual VaultResult remove(
+		const CompatibilityIdentity &identity) = 0;
+	[[nodiscard]] virtual VaultResult authenticateUser(
+		const CompatibilityIdentity &identity) = 0;
+	[[nodiscard]] virtual bool canAuthenticateUser() const = 0;
 };
 
 enum class EnvelopeVersion : uchar {
@@ -43,5 +48,8 @@ enum class EnvelopeVersion : uchar {
 void SetVault(std::shared_ptr<Vault> vault);
 [[nodiscard]] VaultResult ReadVaultSecret(QByteArray *secret);
 [[nodiscard]] VaultResult WriteVaultSecret(const QByteArray &secret);
+[[nodiscard]] VaultResult RemoveVaultSecret();
+[[nodiscard]] VaultResult AuthenticateVaultUser();
+[[nodiscard]] bool CanAuthenticateVaultUser();
 
 } // namespace Reworked::SessionProtection
