@@ -91,6 +91,10 @@ void Controller::setEnabled(bool enabled) {
 	_state = State::Disabled;
 }
 
+void Controller::configurationFailed() {
+	fail(FailurePhase::Health);
+}
+
 State Controller::state() const {
 	return _state;
 }

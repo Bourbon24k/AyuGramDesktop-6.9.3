@@ -64,6 +64,7 @@ public:
 
 	void start(bool enabled);
 	void setEnabled(bool enabled);
+	void configurationFailed();
 	[[nodiscard]] State state() const;
 	[[nodiscard]] FailurePhase failurePhase() const;
 

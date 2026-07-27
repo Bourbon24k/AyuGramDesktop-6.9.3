@@ -54,6 +54,7 @@ public:
 	void setSelected(MTP::ProxyData value);
 	void setReworkedConnectivityProxy(MTP::ProxyData value);
 	void clearReworkedConnectivityProxy();
+	[[nodiscard]] bool hasReworkedConnectivityProxy() const;
 
 	[[nodiscard]] bool reworkedConnectivityEnabled() const;
 	void setReworkedConnectivityEnabled(bool value);

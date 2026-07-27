@@ -916,9 +916,13 @@ auto Application::proxyChanges() const -> rpl::producer<ProxyChange> {
 void Application::badMtprotoConfigurationError() {
 	if (settings().proxy().isEnabled() && !_badProxyDisableBox) {
 		const auto disableCallback = [=] {
-			setCurrentProxy(
-				settings().proxy().selected(),
-				MTP::ProxyData::Settings::System);
+			if (settings().proxy().hasReworkedConnectivityProxy()) {
+				_private->connectivity->configurationFailed();
+			} else {
+				setCurrentProxy(
+					settings().proxy().selected(),
+					MTP::ProxyData::Settings::System);
+			}
 		};
 		_badProxyDisableBox = Ui::show(
 			Ui::MakeInformBox(Lang::Hard::ProxyConfigError()));

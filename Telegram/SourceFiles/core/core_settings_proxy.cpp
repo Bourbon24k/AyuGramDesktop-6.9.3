@@ -356,6 +356,10 @@ void SettingsProxy::clearReworkedConnectivityProxy() {
 	_reworkedConnectivityProxy.reset();
 }
 
+bool SettingsProxy::hasReworkedConnectivityProxy() const {
+	return _reworkedConnectivityProxy.has_value();
+}
+
 bool SettingsProxy::reworkedConnectivityEnabled() const {
 	return _reworkedConnectivityEnabled;
 }
