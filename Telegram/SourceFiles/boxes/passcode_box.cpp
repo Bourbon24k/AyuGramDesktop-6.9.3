@@ -43,6 +43,18 @@ enum class PasswordErrorType {
 	Later,
 };
 
+[[nodiscard]] QString SessionProtectionError(
+		Storage::SessionProtectionResult result) {
+	switch (result) {
+	case Storage::SessionProtectionResult::Unavailable:
+		return tr::lng_session_protection_unavailable(tr::now);
+	case Storage::SessionProtectionResult::Denied:
+		return tr::lng_session_protection_denied(tr::now);
+	default:
+		return tr::lng_session_protection_corrupt(tr::now);
+	}
+}
+
 void SetCloudPassword(
 		not_null<Ui::GenericBox*> box,
 		not_null<Main::Session*> session) {
@@ -709,10 +721,17 @@ void PasscodeBox::save(bool force) {
 			changeCloudPassword(old, pwd);
 		}
 	} else {
+		const auto result = _session->domain().local().setPasscode(pwd.toUtf8());
+		if (result != Storage::SessionProtectionResult::Success) {
+			_newPasscode->setFocus();
+			_newPasscode->showError();
+			_newError = SessionProtectionError(result);
+			update();
+			return;
+		}
 		closeReplacedBy();
 		const auto weak = base::make_weak(this);
 		cSetPasscodeBadTries(0);
-		_session->domain().local().setPasscode(pwd.toUtf8());
 		Core::App().localPasscodeChanged();
 		if (weak) {
 			closeBox();

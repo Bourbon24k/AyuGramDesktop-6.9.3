@@ -6,14 +6,22 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/session_protection/session_protection.h"
 
+#include <mutex>
+#include <utility>
+
 namespace Reworked::SessionProtection {
 namespace {
 
 constexpr auto kHeaderPrefix = "AyuGram.SessionProtection";
-constexpr auto kHeaderPrefixSize = sizeof(kHeaderPrefix) - 1;
 constexpr auto kHeaderVersion1 = "AyuGram.SessionProtection\x01";
 
-Vault *VaultInstance = nullptr;
+std::mutex VaultMutex;
+std::shared_ptr<Vault> VaultInstance;
+
+[[nodiscard]] std::shared_ptr<Vault> CurrentVault() {
+	const auto lock = std::lock_guard(VaultMutex);
+	return VaultInstance;
+}
 
 } // namespace
 
@@ -26,29 +34,31 @@ QByteArray EnvelopeHeader(EnvelopeVersion version) {
 EnvelopeVersion ParseEnvelopeHeader(const QByteArray &header) {
 	if (header == kHeaderVersion1) {
 		return EnvelopeVersion::V1;
-	} else if ((header.size() == int(kHeaderPrefixSize) + 1)
-		&& header.startsWith(kHeaderPrefix)) {
+	} else if (header.startsWith(kHeaderPrefix)) {
 		return EnvelopeVersion::Unsupported;
 	}
 	return EnvelopeVersion::None;
 }
 
-void SetVault(Vault *vault) {
-	VaultInstance = vault;
+void SetVault(std::shared_ptr<Vault> vault) {
+	const auto lock = std::lock_guard(VaultMutex);
+	VaultInstance = std::move(vault);
 }
 
 VaultResult ReadVaultSecret(QByteArray *secret) {
-	if (!VaultInstance) {
+	const auto vault = CurrentVault();
+	if (!vault) {
 		return VaultResult::Unavailable;
 	}
-	return VaultInstance->read(CurrentCompatibilityIdentity(), secret);
+	return vault->read(CurrentCompatibilityIdentity(), secret);
 }
 
 VaultResult WriteVaultSecret(const QByteArray &secret) {
-	if (!VaultInstance) {
+	const auto vault = CurrentVault();
+	if (!vault) {
 		return VaultResult::Unavailable;
 	}
-	return VaultInstance->write(CurrentCompatibilityIdentity(), secret);
+	return vault->write(CurrentCompatibilityIdentity(), secret);
 }
 
 } // namespace Reworked::SessionProtection

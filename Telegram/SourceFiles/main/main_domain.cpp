@@ -395,16 +395,21 @@ bool Domain::removePasscodeIfEmpty() {
 	if (_accounts.size() != 1 || _active.current()->sessionExists()) {
 		return false;
 	}
+	const auto hadPasscode = _local->hasLocalPasscode();
+	if (hadPasscode
+		&& (_local->setPasscode(QByteArray())
+			!= Storage::SessionProtectionResult::Success)) {
+		return false;
+	}
 	Local::reset();
 
 	// We completely logged out, remove the passcode if it was there.
 	if (Core::App().passcodeLocked()) {
 		Core::App().unlockPasscode();
 	}
-	if (!_local->hasLocalPasscode()) {
+	if (!hadPasscode) {
 		return false;
 	}
-	_local->setPasscode(QByteArray());
 	Core::App().settings().setSystemUnlockEnabled(false);
 	Core::App().saveSettingsDelayed();
 	return true;

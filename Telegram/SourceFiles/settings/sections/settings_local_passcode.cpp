@@ -40,12 +40,29 @@ namespace {
 
 using namespace Builder;
 
-void SetPasscode(
+[[nodiscard]] QString SessionProtectionError(
+		Storage::SessionProtectionResult result) {
+	switch (result) {
+	case Storage::SessionProtectionResult::Unavailable:
+		return tr::lng_session_protection_unavailable(tr::now);
+	case Storage::SessionProtectionResult::Denied:
+		return tr::lng_session_protection_denied(tr::now);
+	default:
+		return tr::lng_session_protection_corrupt(tr::now);
+	}
+}
+
+[[nodiscard]] Storage::SessionProtectionResult SetPasscode(
 		not_null<Window::SessionController*> controller,
 		const QString &pass) {
+	const auto result = controller->session().domain().local().setPasscode(
+		pass.toUtf8());
+	if (result != Storage::SessionProtectionResult::Success) {
+		return result;
+	}
 	cSetPasscodeBadTries(0);
-	controller->session().domain().local().setPasscode(pass.toUtf8());
 	Core::App().localPasscodeChanged();
+	return result;
 }
 
 } // namespace
@@ -242,7 +259,14 @@ void LocalPasscodeEnter::setupContent() {
 						return;
 					}
 				}
-				SetPasscode(controller(), newText);
+				const auto result = SetPasscode(controller(), newText);
+				if (result != Storage::SessionProtectionResult::Success) {
+					newPasscode->setFocus();
+					newPasscode->showError();
+					error->show();
+					error->setText(SessionProtectionError(result));
+					return;
+				}
 				if (isCreate) {
 					if (Platform::IsWindows() || _systemUnlockWithBiometric) {
 						Core::App().settings().setSystemUnlockEnabled(true);
@@ -681,7 +705,12 @@ base::weak_qptr<Ui::RpWidget> LocalPasscodeManage::createPinnedToBottom(
 			Ui::MakeConfirmBox({
 				.text = tr::lng_settings_passcode_disable_sure(),
 				.confirmed = [=](Fn<void()> &&close) {
-					SetPasscode(controller(), QString());
+					const auto result = SetPasscode(controller(), QString());
+					if (result != Storage::SessionProtectionResult::Success) {
+						controller()->show(Ui::MakeInformBox(
+							SessionProtectionError(result)));
+						return;
+					}
 					Core::App().settings().setSystemUnlockEnabled(false);
 					Core::App().saveSettingsDelayed();
 

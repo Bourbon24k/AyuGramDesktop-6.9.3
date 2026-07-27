@@ -53,7 +53,7 @@ public:
 	void startFromScratch();
 
 	[[nodiscard]] bool checkPasscode(const QByteArray &passcode) const;
-	void setPasscode(const QByteArray &passcode);
+	[[nodiscard]] SessionProtectionResult setPasscode(const QByteArray &passcode);
 	[[nodiscard]] SessionProtectionResult enableSessionProtection(
 		const QByteArray &passcode);
 	[[nodiscard]] SessionProtectionResult disableSessionProtection(

@@ -8,6 +8,8 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 
 #include "ayu/reworked/session_protection/session_protection_contract.h"
 
+#include <memory>
+
 namespace Reworked::SessionProtection {
 
 enum class VaultResult : uchar {
@@ -38,7 +40,7 @@ enum class EnvelopeVersion : uchar {
 [[nodiscard]] QByteArray EnvelopeHeader(EnvelopeVersion version);
 [[nodiscard]] EnvelopeVersion ParseEnvelopeHeader(const QByteArray &header);
 
-void SetVault(Vault *vault);
+void SetVault(std::shared_ptr<Vault> vault);
 [[nodiscard]] VaultResult ReadVaultSecret(QByteArray *secret);
 [[nodiscard]] VaultResult WriteVaultSecret(const QByteArray &secret);
 

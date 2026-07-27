@@ -1199,6 +1199,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_passcode_differ" = "Passcodes are different";
 "lng_passcode_wrong" = "Wrong passcode";
 "lng_passcode_is_same" = "Passcode was not changed";
+"lng_session_protection_unavailable" = "Session protection is unavailable on this device. Keep the current local passcode and try again.";
+"lng_session_protection_denied" = "Allow access to the system vault, then try again.";
+"lng_session_protection_corrupt" = "Session protection data could not be verified. Your local passcode was not changed.";
 "lng_passcode_enter" = "Enter your local passcode";
 "lng_passcode_ph" = "Your passcode";
 "lng_passcode_submit" = "Submit";

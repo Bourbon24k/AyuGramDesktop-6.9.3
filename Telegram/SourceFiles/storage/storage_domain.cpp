@@ -348,19 +348,19 @@ bool Domain::checkPasscode(const QByteArray &passcode) const {
 	return checkKey->equals(_passcodeKey);
 }
 
-void Domain::setPasscode(const QByteArray &passcode) {
+SessionProtectionResult Domain::setPasscode(const QByteArray &passcode) {
 	Expects(!_passcodeKeySalt.isEmpty());
 	Expects(_localKey != nullptr);
 
 	if (_localKeyEnvelope == LocalKeyEnvelope::SessionProtectionV1) {
 		auto vaultSecret = QByteArray();
-		if (SessionProtection::ReadVaultSecret(&vaultSecret)
-			!= SessionProtection::VaultResult::Success) {
-			return;
+		const auto vaultResult = SessionProtection::ReadVaultSecret(&vaultSecret);
+		if (vaultResult != SessionProtection::VaultResult::Success) {
+			return VaultResultToSessionProtectionResult(vaultResult);
 		}
-		if (encryptSessionProtectedLocalKey(passcode, vaultSecret)
-			!= SessionProtectionResult::Success) {
-			return;
+		const auto result = encryptSessionProtectedLocalKey(passcode, vaultSecret);
+		if (result != SessionProtectionResult::Success) {
+			return result;
 		}
 	} else {
 		encryptLocalKey(passcode);
@@ -368,6 +368,7 @@ void Domain::setPasscode(const QByteArray &passcode) {
 	writeAccounts();
 
 	_passcodeKeyChanged.fire({});
+	return SessionProtectionResult::Success;
 }
 
 int Domain::oldVersion() const {
