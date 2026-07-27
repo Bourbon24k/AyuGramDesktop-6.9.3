@@ -35,6 +35,17 @@ namespace {
 
 constexpr auto kSystemUnlockDelay = crl::time(1000);
 
+[[nodiscard]] QString SessionProtectionError(Storage::StartResult result) {
+	switch (result) {
+	case Storage::StartResult::SessionProtectionUnavailable:
+		return tr::lng_session_protection_unavailable(tr::now);
+	case Storage::StartResult::SessionProtectionDenied:
+		return tr::lng_session_protection_denied(tr::now);
+	default:
+		return tr::lng_session_protection_corrupt(tr::now);
+	}
+}
+
 } // namespace
 
 LockWidget::LockWidget(QWidget *parent, not_null<Controller*> window)
@@ -270,17 +281,25 @@ void PasscodeLockWidget::submit() {
 
 	const auto passcode = _passcode->text().toUtf8();
 	auto &domain = Core::App().domain();
-	const auto correct = domain.started()
-		? domain.local().checkPasscode(passcode)
-		: (domain.start(passcode) == Storage::StartResult::Success);
-	if (!correct) {
+	const auto result = domain.started()
+		? (domain.local().checkPasscode(passcode)
+			? Storage::StartResult::Success
+			: Storage::StartResult::IncorrectPasscode)
+		: domain.start(passcode);
+	if (result == Storage::StartResult::Success) {
+		Core::App().unlockPasscode(); // Destroys this widget.
+		return;
+	}
+	if (result == Storage::StartResult::IncorrectPasscode
+		|| result == Storage::StartResult::IncorrectPasscodeLegacy) {
 		cSetPasscodeBadTries(cPasscodeBadTries() + 1);
 		cSetPasscodeLastTry(crl::now());
 		error();
 		return;
 	}
-
-	Core::App().unlockPasscode(); // Destroys this widget.
+	_error = SessionProtectionError(result);
+	_passcode->showError();
+	update();
 }
 
 void PasscodeLockWidget::error() {
