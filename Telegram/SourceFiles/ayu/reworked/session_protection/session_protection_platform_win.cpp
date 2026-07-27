@@ -6,17 +6,22 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/session_protection/session_protection_platform_impl.h"
 
+#include "base/platform/win/base_windows_winrt.h"
+
 #ifdef Q_OS_WIN
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QSaveFile>
+#include <QtWidgets/QWidget>
 
 #include <windows.h>
 #include <wincrypt.h>
 #include <winrt/Windows.Security.Credentials.UI.h>
+#include <UserConsentVerifierInterop.h>
 
+#include <string>
 #include <utility>
 
 namespace Reworked::SessionProtection {
@@ -26,7 +31,9 @@ constexpr auto kEntropy = "AyuGram.SessionProtection.Windows.DPAPI.v1";
 
 [[nodiscard]] QByteArray Entropy(const CompatibilityIdentity &identity) {
 	return QByteArray(kEntropy)
-		+ identity.applicationIdentifier.toUtf8();
+		+ identity.applicationIdentifier.toUtf8()
+		+ '\0'
+		+ identity.profileDirectory.toUtf8();
 }
 
 [[nodiscard]] QString VaultPath(const CompatibilityIdentity &identity) {
@@ -39,6 +46,40 @@ constexpr auto kEntropy = "AyuGram.SessionProtection.Windows.DPAPI.v1";
 		.cbData = DWORD(bytes.size()),
 		.pbData = reinterpret_cast<BYTE*>(const_cast<char*>(bytes.constData())),
 	};
+}
+
+void Complete(VaultAuthenticationCallback callback, VaultResult result) {
+	crl::on_main([=] {
+		callback(result);
+	});
+}
+
+void Complete(
+		VaultAuthenticationAvailabilityCallback callback,
+		bool available) {
+	crl::on_main([=] {
+		callback(available);
+	});
+}
+
+[[nodiscard]] VaultResult AuthenticationResult(
+		winrt::Windows::Security::Credentials::UI::UserConsentVerificationResult
+			result) {
+	using namespace winrt::Windows::Security::Credentials::UI;
+	switch (result) {
+	case UserConsentVerificationResult::Verified:
+		return VaultResult::Success;
+	case UserConsentVerificationResult::DeviceBusy:
+	case UserConsentVerificationResult::RetriesExhausted:
+	case UserConsentVerificationResult::Canceled:
+		return VaultResult::Denied;
+	case UserConsentVerificationResult::DeviceNotPresent:
+	case UserConsentVerificationResult::NotConfiguredForUser:
+	case UserConsentVerificationResult::DisabledByPolicy:
+		return VaultResult::Unavailable;
+	default:
+		return VaultResult::Corrupt;
+	}
 }
 
 class WindowsVault final : public Vault {
@@ -72,8 +113,9 @@ public:
 		*secret = QByteArray(
 			reinterpret_cast<const char*>(output.pbData),
 			int(output.cbData));
+		SecureZeroMemory(output.pbData, output.cbData);
 		LocalFree(output.pbData);
-		return VaultResult::Success;
+		return secret->isEmpty() ? VaultResult::Corrupt : VaultResult::Success;
 	}
 
 	[[nodiscard]] VaultResult write(
@@ -120,33 +162,105 @@ public:
 			: VaultResult::Unavailable;
 	}
 
-	[[nodiscard]] VaultResult authenticateUser(
-			const CompatibilityIdentity &) override {
+	void authenticateUser(
+			QWidget *parent,
+			VaultAuthenticationCallback callback) override {
 		using namespace winrt::Windows::Security::Credentials::UI;
-		try {
-			if (UserConsentVerifier::CheckAvailabilityAsync().get()
-				!= UserConsentVerifierAvailability::Available) {
-				return VaultResult::Unavailable;
-			}
-			return (UserConsentVerifier::RequestVerificationAsync(
-				L"Authenticate to access protected local data").get()
-				== UserConsentVerificationResult::Verified)
-				? VaultResult::Success
-				: VaultResult::Denied;
-		} catch (const winrt::hresult_error &) {
-			return VaultResult::Unavailable;
+		if (!parent || !base::WinRT::Supported()) {
+			Complete(std::move(callback), VaultResult::Unavailable);
+			return;
+		}
+		const auto window = parent->window();
+		window->createWinId();
+		const auto handle = reinterpret_cast<HWND>(window->winId());
+		if (!handle) {
+			Complete(std::move(callback), VaultResult::Unavailable);
+			return;
+		}
+		const auto started = base::WinRT::Try([&] {
+			UserConsentVerifier::CheckAvailabilityAsync().Completed([=](
+					winrt::Windows::Foundation::IAsyncOperation<
+						UserConsentVerifierAvailability> operation,
+					winrt::Windows::Foundation::AsyncStatus status) {
+				const auto availability = base::WinRT::Try([&] {
+					return operation.GetResults();
+				});
+				if (status != winrt::Windows::Foundation::AsyncStatus::Completed
+					|| !availability
+					|| *availability != UserConsentVerifierAvailability::Available) {
+					Complete(callback, VaultResult::Unavailable);
+					return;
+				}
+				const auto requested = base::WinRT::Try([&] {
+					const auto interop = winrt::get_activation_factory<
+						UserConsentVerifier,
+						IUserConsentVerifierInterop>();
+					if (!interop) {
+						return false;
+					}
+					const auto text = winrt::to_hstring(std::string(
+						"Authenticate to access protected local data"));
+					winrt::capture<winrt::Windows::Foundation::IAsyncOperation<
+						UserConsentVerificationResult>>(
+						interop,
+						&IUserConsentVerifierInterop::RequestVerificationForWindowAsync,
+						handle,
+						reinterpret_cast<HSTRING>(winrt::get_abi(text))
+					).Completed([=](
+							winrt::Windows::Foundation::IAsyncOperation<
+								UserConsentVerificationResult> operation,
+							winrt::Windows::Foundation::AsyncStatus status) {
+						const auto result = base::WinRT::Try([&] {
+							return operation.GetResults();
+						});
+						Complete(
+							callback,
+							(status == winrt::Windows::Foundation::AsyncStatus::Canceled)
+								? VaultResult::Denied
+								: (status != winrt::Windows::Foundation::AsyncStatus::Completed
+									|| !result)
+								? VaultResult::Corrupt
+								: AuthenticationResult(*result));
+					});
+					return true;
+				});
+				if (!requested || !*requested) {
+					Complete(callback, VaultResult::Unavailable);
+				}
+			});
+		});
+		if (!started) {
+			Complete(std::move(callback), VaultResult::Unavailable);
 		}
 	}
 
-	[[nodiscard]] bool canAuthenticateUser() const override {
+	void canAuthenticateUser(
+			VaultAuthenticationAvailabilityCallback callback) const override {
 		using namespace winrt::Windows::Security::Credentials::UI;
-		try {
-			return UserConsentVerifier::CheckAvailabilityAsync().get()
-				== UserConsentVerifierAvailability::Available;
-		} catch (const winrt::hresult_error &) {
-			return false;
+		if (!base::WinRT::Supported()) {
+			Complete(std::move(callback), false);
+			return;
+		}
+		const auto started = base::WinRT::Try([&] {
+			UserConsentVerifier::CheckAvailabilityAsync().Completed([=](
+					winrt::Windows::Foundation::IAsyncOperation<
+						UserConsentVerifierAvailability> operation,
+					winrt::Windows::Foundation::AsyncStatus status) {
+				const auto availability = base::WinRT::Try([&] {
+					return operation.GetResults();
+				});
+				Complete(
+					callback,
+					status == winrt::Windows::Foundation::AsyncStatus::Completed
+						&& availability
+						&& (*availability == UserConsentVerifierAvailability::Available));
+			});
+		});
+		if (!started) {
+			Complete(std::move(callback), false);
 		}
 	}
+
 };
 
 } // namespace

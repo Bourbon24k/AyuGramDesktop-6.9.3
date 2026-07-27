@@ -69,17 +69,24 @@ VaultResult RemoveVaultSecret() {
 	return vault->remove(CurrentCompatibilityIdentity());
 }
 
-VaultResult AuthenticateVaultUser() {
+void AuthenticateVaultUser(
+		QWidget *parent,
+		VaultAuthenticationCallback callback) {
 	const auto vault = CurrentVault();
 	if (!vault) {
-		return VaultResult::Unavailable;
+		callback(VaultResult::Unavailable);
+		return;
 	}
-	return vault->authenticateUser(CurrentCompatibilityIdentity());
+	vault->authenticateUser(parent, std::move(callback));
 }
 
-bool CanAuthenticateVaultUser() {
+void CanAuthenticateVaultUser(VaultAuthenticationAvailabilityCallback callback) {
 	const auto vault = CurrentVault();
-	return vault && vault->canAuthenticateUser();
+	if (!vault) {
+		callback(false);
+		return;
+	}
+	vault->canAuthenticateUser(std::move(callback));
 }
 
 } // namespace Reworked::SessionProtection

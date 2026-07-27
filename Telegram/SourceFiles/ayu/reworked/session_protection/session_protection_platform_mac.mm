@@ -13,7 +13,8 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <Security/Security.h>
 
-#include <dispatch/dispatch.h>
+#include <memory>
+#include <utility>
 
 namespace Reworked::SessionProtection {
 namespace {
@@ -35,6 +36,8 @@ constexpr auto kService = "AyuGram.SessionProtection.Keychain.v1";
 		return VaultResult::Success;
 	} else if (status == errSecAuthFailed || status == errSecUserCanceled) {
 		return VaultResult::Denied;
+	} else if (status == errSecDecode) {
+		return VaultResult::Corrupt;
 	}
 	return VaultResult::Unavailable;
 }
@@ -45,6 +48,46 @@ constexpr auto kService = "AyuGram.SessionProtection.Keychain.v1";
 		(id)kSecAttrService: [NSString stringWithUTF8String:kService],
 		(id)kSecAttrAccount: Account(identity).toNSString(),
 	};
+}
+
+void Complete(VaultAuthenticationCallback callback, VaultResult result) {
+	crl::on_main([=] {
+		callback(result);
+	});
+}
+
+void Complete(
+		std::shared_ptr<LAContext> context,
+		VaultAuthenticationCallback callback,
+		VaultResult result) {
+	crl::on_main([=] {
+		callback(result);
+		static_cast<void>(context);
+	});
+}
+
+void Complete(
+		VaultAuthenticationAvailabilityCallback callback,
+		bool available) {
+	crl::on_main([=] {
+		callback(available);
+	});
+}
+
+[[nodiscard]] VaultResult AuthenticationResult(NSError *error) {
+	const auto code = error.code;
+	if (code == LAErrorUserCancel
+		|| code == LAErrorSystemCancel
+		|| code == LAErrorAppCancel
+		|| code == LAErrorUserFallback
+		|| code == LAErrorAuthenticationFailed) {
+		return VaultResult::Denied;
+	} else if (code == LAErrorBiometryNotAvailable
+		|| code == LAErrorBiometryNotEnrolled
+		|| code == LAErrorPasscodeNotSet) {
+		return VaultResult::Unavailable;
+	}
+	return VaultResult::Corrupt;
 }
 
 class MacVault final : public Vault {
@@ -109,43 +152,47 @@ public:
 		}
 	}
 
-	[[nodiscard]] VaultResult authenticateUser(
-			const CompatibilityIdentity &) override {
+	void authenticateUser(
+			QWidget *,
+			VaultAuthenticationCallback callback) override {
 		@autoreleasepool {
-			const auto context = [[LAContext alloc] init];
+			const auto context = std::shared_ptr<LAContext>(
+				[[LAContext alloc] init],
+				[](LAContext *value) {
+					[value release];
+				});
 			NSError *error = nil;
-			if (![context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
+			if (![context.get()
+				canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
 				error:&error]) {
-				[context release];
-				return VaultResult::Unavailable;
+				Complete(std::move(callback), VaultResult::Unavailable);
+				return;
 			}
-			__block BOOL authenticated = NO;
-			const auto complete = dispatch_semaphore_create(0);
-			[context evaluatePolicy:LAPolicyDeviceOwnerAuthentication
+			[context.get() evaluatePolicy:LAPolicyDeviceOwnerAuthentication
 			localizedReason:@"Authenticate to access protected local data"
-			reply:^(BOOL success, NSError *) {
-			authenticated = success;
-			dispatch_semaphore_signal(complete);
+			reply:^(BOOL success, NSError *replyError) {
+				Complete(
+					context,
+					callback,
+					success
+						? VaultResult::Success
+						: AuthenticationResult(replyError));
 			}];
-			dispatch_semaphore_wait(complete, DISPATCH_TIME_FOREVER);
-			[context release];
-			if (authenticated) {
-				return VaultResult::Success;
-			}
-			return VaultResult::Denied;
 		}
 	}
 
-	[[nodiscard]] bool canAuthenticateUser() const override {
+	void canAuthenticateUser(
+			VaultAuthenticationAvailabilityCallback callback) const override {
 		@autoreleasepool {
 			const auto context = [[LAContext alloc] init];
 			const auto result = [context
 				canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
 				error:nil];
 			[context release];
-			return result;
+			Complete(std::move(callback), result);
 		}
 	}
+
 };
 
 } // namespace

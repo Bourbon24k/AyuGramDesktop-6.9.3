@@ -7,8 +7,11 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #pragma once
 
 #include "ayu/reworked/session_protection/session_protection_contract.h"
+#include "base/functional.h"
 
 #include <memory>
+
+class QWidget;
 
 namespace Reworked::SessionProtection {
 
@@ -18,6 +21,9 @@ enum class VaultResult : uchar {
 	Denied,
 	Corrupt,
 };
+
+using VaultAuthenticationCallback = Fn<void(VaultResult)>;
+using VaultAuthenticationAvailabilityCallback = Fn<void(bool)>;
 
 class Vault {
 public:
@@ -31,9 +37,12 @@ public:
 		const QByteArray &secret) = 0;
 	[[nodiscard]] virtual VaultResult remove(
 		const CompatibilityIdentity &identity) = 0;
-	[[nodiscard]] virtual VaultResult authenticateUser(
-		const CompatibilityIdentity &identity) = 0;
-	[[nodiscard]] virtual bool canAuthenticateUser() const = 0;
+	virtual void authenticateUser(
+		QWidget *parent,
+		VaultAuthenticationCallback callback) = 0;
+	virtual void canAuthenticateUser(
+		VaultAuthenticationAvailabilityCallback callback) const = 0;
+
 };
 
 enum class EnvelopeVersion : uchar {
@@ -49,7 +58,9 @@ void SetVault(std::shared_ptr<Vault> vault);
 [[nodiscard]] VaultResult ReadVaultSecret(QByteArray *secret);
 [[nodiscard]] VaultResult WriteVaultSecret(const QByteArray &secret);
 [[nodiscard]] VaultResult RemoveVaultSecret();
-[[nodiscard]] VaultResult AuthenticateVaultUser();
-[[nodiscard]] bool CanAuthenticateVaultUser();
+void AuthenticateVaultUser(
+	QWidget *parent,
+	VaultAuthenticationCallback callback);
+void CanAuthenticateVaultUser(VaultAuthenticationAvailabilityCallback callback);
 
 } // namespace Reworked::SessionProtection
