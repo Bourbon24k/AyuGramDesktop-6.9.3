@@ -6,9 +6,16 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/connectivity/connectivity_controller.h"
 
+#include <crl/crl_on_main.h>
+
 #include <utility>
 
 namespace Reworked::Connectivity {
+
+struct Controller::CallbackContext {
+	Fn<void(int, HealthResult)> done;
+};
+
 namespace {
 
 constexpr auto kHealthTimeout = crl::time(5000);
@@ -43,6 +50,7 @@ Controller::Controller(
 
 Controller::~Controller() {
 	++_request;
+	invalidateCallback();
 	_healthTimeout.cancel();
 	if (_helper) {
 		_helper->stop();
@@ -55,14 +63,25 @@ void Controller::start(bool enabled) {
 		_state = State::Disabled;
 		return;
 	}
+	invalidateCallback();
 	_state = State::Starting;
 	_failurePhase = FailurePhase::None;
 	_failureChanged(_failurePhase);
 	const auto request = ++_request;
+	_callbackContext = std::make_shared<CallbackContext>();
+	_callbackContext->done = [=](int callbackRequest, HealthResult result) {
+		healthDone(callbackRequest, std::move(result));
+	};
+	const auto callbackContext = std::weak_ptr<CallbackContext>(
+		_callbackContext);
 	_healthTimeout.callOnce(kHealthTimeout);
 	if (_helper) {
-		_helper->start([=](HealthResult result) {
-			healthDone(request, std::move(result));
+		_helper->start([callbackContext, request](HealthResult result) mutable {
+			crl::on_main([callbackContext, request, result = std::move(result)]() mutable {
+				if (const auto context = callbackContext.lock()) {
+					context->done(request, std::move(result));
+				}
+			});
 		});
 	} else {
 		fail(FailurePhase::HelperUnavailable);
@@ -74,12 +93,13 @@ void Controller::setEnabled(bool enabled) {
 		return;
 	}
 	_enabled = enabled;
-	_intentChanged(_enabled);
 	if (_enabled) {
+		_intentChanged(true);
 		start(true);
 		return;
 	}
 	++_request;
+	invalidateCallback();
 	_healthTimeout.cancel();
 	if (_helper) {
 		_helper->stop();
@@ -89,6 +109,7 @@ void Controller::setEnabled(bool enabled) {
 		_clearProxy();
 	}
 	_state = State::Disabled;
+	_intentChanged(false);
 }
 
 void Controller::configurationFailed() {
@@ -128,6 +149,7 @@ void Controller::fail(FailurePhase phase) {
 		return;
 	}
 	++_request;
+	invalidateCallback();
 	_healthTimeout.cancel();
 	if (_helper) {
 		_helper->stop();
@@ -137,6 +159,10 @@ void Controller::fail(FailurePhase phase) {
 	_failurePhase = phase;
 	_failureChanged(_failurePhase);
 	_state = State::Failed;
+}
+
+void Controller::invalidateCallback() {
+	_callbackContext.reset();
 }
 
 MTP::ProxyData Controller::loopbackProxy(const HealthResult &result) const {

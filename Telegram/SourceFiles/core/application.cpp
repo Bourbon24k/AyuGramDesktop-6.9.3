@@ -899,6 +899,10 @@ void Application::setCurrentProxy(
 	proxyRotationSettingsChanged();
 }
 
+void Application::setReworkedConnectivityEnabled(bool enabled) {
+	_private->connectivity->setEnabled(enabled);
+}
+
 void Application::proxyRotationSettingsChanged() {
 	_private->proxyRotation->settingsChanged();
 }

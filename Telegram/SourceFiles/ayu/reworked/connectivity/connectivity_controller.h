@@ -69,8 +69,11 @@ public:
 	[[nodiscard]] FailurePhase failurePhase() const;
 
 private:
+	struct CallbackContext;
+
 	void healthDone(int request, HealthResult result);
 	void fail(FailurePhase phase);
+	void invalidateCallback();
 	[[nodiscard]] MTP::ProxyData loopbackProxy(const HealthResult &result) const;
 
 	std::unique_ptr<Helper> _helper;
@@ -83,6 +86,7 @@ private:
 	FailurePhase _failurePhase = FailurePhase::None;
 	int _request = 0;
 	bool _enabled = true;
+	std::shared_ptr<CallbackContext> _callbackContext;
 
 };
 

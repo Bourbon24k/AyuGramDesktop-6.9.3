@@ -87,6 +87,7 @@ public:
 	void setProxyForCalls(bool enabled);
 	void setProxyRotationEnabled(bool enabled);
 	void setProxyRotationTimeout(int value);
+	void setReworkedConnectivityEnabled(bool enabled);
 	void setTryIPv6(bool enabled);
 	rpl::producer<ProxyData::Settings> proxySettingsValue() const;
 
