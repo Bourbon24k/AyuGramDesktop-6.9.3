@@ -50,27 +50,38 @@ constexpr auto kService = "AyuGram.SessionProtection.Keychain.v1";
 	};
 }
 
-void Complete(VaultAuthenticationCallback callback, VaultResult result) {
+void Complete(
+		VaultCallbackContext context,
+		VaultAuthenticationCallback callback,
+		VaultResult result) {
 	crl::on_main([=] {
-		callback(result);
+		if (context) {
+			callback(result);
+		}
 	});
 }
 
 void Complete(
 		std::shared_ptr<LAContext> context,
+		VaultCallbackContext callbackContext,
 		VaultAuthenticationCallback callback,
 		VaultResult result) {
 	crl::on_main([=] {
-		callback(result);
+		if (callbackContext) {
+			callback(result);
+		}
 		static_cast<void>(context);
 	});
 }
 
 void Complete(
+		VaultCallbackContext context,
 		VaultAuthenticationAvailabilityCallback callback,
 		bool available) {
 	crl::on_main([=] {
-		callback(available);
+		if (context) {
+			callback(available);
+		}
 	});
 }
 
@@ -153,7 +164,8 @@ public:
 	}
 
 	void authenticateUser(
-			QWidget *,
+			QPointer<QWidget>,
+			VaultCallbackContext callbackContext,
 			VaultAuthenticationCallback callback) override {
 		@autoreleasepool {
 			const auto context = std::shared_ptr<LAContext>(
@@ -165,7 +177,10 @@ public:
 			if (![context.get()
 				canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
 				error:&error]) {
-				Complete(std::move(callback), VaultResult::Unavailable);
+				Complete(
+					std::move(callbackContext),
+					std::move(callback),
+					VaultResult::Unavailable);
 				return;
 			}
 			[context.get() evaluatePolicy:LAPolicyDeviceOwnerAuthentication
@@ -173,6 +188,7 @@ public:
 			reply:^(BOOL success, NSError *replyError) {
 				Complete(
 					context,
+					callbackContext,
 					callback,
 					success
 						? VaultResult::Success
@@ -182,6 +198,7 @@ public:
 	}
 
 	void canAuthenticateUser(
+			VaultCallbackContext callbackContext,
 			VaultAuthenticationAvailabilityCallback callback) const override {
 		@autoreleasepool {
 			const auto context = [[LAContext alloc] init];
@@ -189,7 +206,7 @@ public:
 				canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
 				error:nil];
 			[context release];
-			Complete(std::move(callback), result);
+			Complete(std::move(callbackContext), std::move(callback), result);
 		}
 	}
 

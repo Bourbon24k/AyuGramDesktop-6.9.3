@@ -6,9 +6,10 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/session_protection/session_protection_platform_impl.h"
 
-#include "base/platform/win/base_windows_winrt.h"
-
 #ifdef Q_OS_WIN
+
+#include "base/platform/base_platform_info.h"
+#include "base/platform/win/base_windows_winrt.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -19,7 +20,20 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #include <windows.h>
 #include <wincrypt.h>
 #include <winrt/Windows.Security.Credentials.UI.h>
+
+#if defined(__has_include)
+#if __has_include(<UserConsentVerifierInterop.h>)
+#define AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP 1
+#endif
+#endif
+
+#ifndef AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
+#define AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP 0
+#endif
+
+#if AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
 #include <UserConsentVerifierInterop.h>
+#endif
 
 #include <string>
 #include <utility>
@@ -48,20 +62,29 @@ constexpr auto kEntropy = "AyuGram.SessionProtection.Windows.DPAPI.v1";
 	};
 }
 
-void Complete(VaultAuthenticationCallback callback, VaultResult result) {
+void Complete(
+		VaultCallbackContext context,
+		VaultAuthenticationCallback callback,
+		VaultResult result) {
 	crl::on_main([=] {
-		callback(result);
+		if (context) {
+			callback(result);
+		}
 	});
 }
 
 void Complete(
+		VaultCallbackContext context,
 		VaultAuthenticationAvailabilityCallback callback,
 		bool available) {
 	crl::on_main([=] {
-		callback(available);
+		if (context) {
+			callback(available);
+		}
 	});
 }
 
+#if AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
 [[nodiscard]] VaultResult AuthenticationResult(
 		winrt::Windows::Security::Credentials::UI::UserConsentVerificationResult
 			result) {
@@ -71,6 +94,7 @@ void Complete(
 		return VaultResult::Success;
 	case UserConsentVerificationResult::DeviceBusy:
 	case UserConsentVerificationResult::RetriesExhausted:
+		return VaultResult::Unavailable;
 	case UserConsentVerificationResult::Canceled:
 		return VaultResult::Denied;
 	case UserConsentVerificationResult::DeviceNotPresent:
@@ -81,6 +105,7 @@ void Complete(
 		return VaultResult::Corrupt;
 	}
 }
+#endif
 
 class WindowsVault final : public Vault {
 public:
@@ -163,18 +188,19 @@ public:
 	}
 
 	void authenticateUser(
-			QWidget *parent,
+			QPointer<QWidget> parent,
+			VaultCallbackContext context,
 			VaultAuthenticationCallback callback) override {
+	#if !AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
+		Complete(std::move(context), std::move(callback), VaultResult::Unavailable);
+		return;
+	#else
 		using namespace winrt::Windows::Security::Credentials::UI;
-		if (!parent || !base::WinRT::Supported()) {
-			Complete(std::move(callback), VaultResult::Unavailable);
-			return;
-		}
-		const auto window = parent->window();
-		window->createWinId();
-		const auto handle = reinterpret_cast<HWND>(window->winId());
-		if (!handle) {
-			Complete(std::move(callback), VaultResult::Unavailable);
+		if (!parent
+			|| !context
+			|| !Platform::IsWindows11OrGreater()
+			|| !base::WinRT::Supported()) {
+			Complete(std::move(context), std::move(callback), VaultResult::Unavailable);
 			return;
 		}
 		const auto started = base::WinRT::Try([&] {
@@ -188,7 +214,18 @@ public:
 				if (status != winrt::Windows::Foundation::AsyncStatus::Completed
 					|| !availability
 					|| *availability != UserConsentVerifierAvailability::Available) {
-					Complete(callback, VaultResult::Unavailable);
+					Complete(context, callback, VaultResult::Unavailable);
+					return;
+				}
+				if (!parent) {
+					Complete(context, callback, VaultResult::Unavailable);
+					return;
+				}
+				const auto window = parent->window();
+				window->createWinId();
+				const auto handle = reinterpret_cast<HWND>(window->winId());
+				if (!handle) {
+					Complete(context, callback, VaultResult::Unavailable);
 					return;
 				}
 				const auto requested = base::WinRT::Try([&] {
@@ -214,6 +251,7 @@ public:
 							return operation.GetResults();
 						});
 						Complete(
+							context,
 							callback,
 							(status == winrt::Windows::Foundation::AsyncStatus::Canceled)
 								? VaultResult::Denied
@@ -225,20 +263,28 @@ public:
 					return true;
 				});
 				if (!requested || !*requested) {
-					Complete(callback, VaultResult::Unavailable);
+					Complete(context, callback, VaultResult::Unavailable);
 				}
 			});
 		});
 		if (!started) {
-			Complete(std::move(callback), VaultResult::Unavailable);
+			Complete(std::move(context), std::move(callback), VaultResult::Unavailable);
 		}
+	#endif
 	}
 
 	void canAuthenticateUser(
+			VaultCallbackContext context,
 			VaultAuthenticationAvailabilityCallback callback) const override {
+	#if !AYUGRAM_SESSION_PROTECTION_HAS_CONSENT_INTEROP
+		Complete(std::move(context), std::move(callback), false);
+		return;
+	#else
 		using namespace winrt::Windows::Security::Credentials::UI;
-		if (!base::WinRT::Supported()) {
-			Complete(std::move(callback), false);
+		if (!context
+			|| !Platform::IsWindows11OrGreater()
+			|| !base::WinRT::Supported()) {
+			Complete(std::move(context), std::move(callback), false);
 			return;
 		}
 		const auto started = base::WinRT::Try([&] {
@@ -250,6 +296,7 @@ public:
 					return operation.GetResults();
 				});
 				Complete(
+					context,
 					callback,
 					status == winrt::Windows::Foundation::AsyncStatus::Completed
 						&& availability
@@ -257,8 +304,9 @@ public:
 			});
 		});
 		if (!started) {
-			Complete(std::move(callback), false);
+			Complete(std::move(context), std::move(callback), false);
 		}
+	#endif
 	}
 
 };

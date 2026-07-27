@@ -9,8 +9,11 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #include "ayu/reworked/session_protection/session_protection_contract.h"
 #include "base/functional.h"
 
+#include <QtCore/QPointer>
+
 #include <memory>
 
+class QObject;
 class QWidget;
 
 namespace Reworked::SessionProtection {
@@ -24,6 +27,7 @@ enum class VaultResult : uchar {
 
 using VaultAuthenticationCallback = Fn<void(VaultResult)>;
 using VaultAuthenticationAvailabilityCallback = Fn<void(bool)>;
+using VaultCallbackContext = QPointer<QObject>;
 
 class Vault {
 public:
@@ -38,9 +42,11 @@ public:
 	[[nodiscard]] virtual VaultResult remove(
 		const CompatibilityIdentity &identity) = 0;
 	virtual void authenticateUser(
-		QWidget *parent,
+		QPointer<QWidget> parent,
+		VaultCallbackContext context,
 		VaultAuthenticationCallback callback) = 0;
 	virtual void canAuthenticateUser(
+		VaultCallbackContext context,
 		VaultAuthenticationAvailabilityCallback callback) const = 0;
 
 };
@@ -59,8 +65,11 @@ void SetVault(std::shared_ptr<Vault> vault);
 [[nodiscard]] VaultResult WriteVaultSecret(const QByteArray &secret);
 [[nodiscard]] VaultResult RemoveVaultSecret();
 void AuthenticateVaultUser(
-	QWidget *parent,
+	QPointer<QWidget> parent,
+	VaultCallbackContext context,
 	VaultAuthenticationCallback callback);
-void CanAuthenticateVaultUser(VaultAuthenticationAvailabilityCallback callback);
+void CanAuthenticateVaultUser(
+	VaultCallbackContext context,
+	VaultAuthenticationAvailabilityCallback callback);
 
 } // namespace Reworked::SessionProtection

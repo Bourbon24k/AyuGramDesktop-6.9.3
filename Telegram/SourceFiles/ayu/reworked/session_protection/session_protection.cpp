@@ -6,6 +6,8 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 */
 #include "ayu/reworked/session_protection/session_protection.h"
 
+#include <crl/crl_on_main.h>
+
 #include <mutex>
 #include <utility>
 
@@ -21,6 +23,28 @@ std::shared_ptr<Vault> VaultInstance;
 [[nodiscard]] std::shared_ptr<Vault> CurrentVault() {
 	const auto lock = std::lock_guard(VaultMutex);
 	return VaultInstance;
+}
+
+void Complete(
+		VaultCallbackContext context,
+		VaultAuthenticationCallback callback,
+		VaultResult result) {
+	crl::on_main([=] {
+		if (context) {
+			callback(result);
+		}
+	});
+}
+
+void Complete(
+		VaultCallbackContext context,
+		VaultAuthenticationAvailabilityCallback callback,
+		bool available) {
+	crl::on_main([=] {
+		if (context) {
+			callback(available);
+		}
+	});
 }
 
 } // namespace
@@ -70,23 +94,29 @@ VaultResult RemoveVaultSecret() {
 }
 
 void AuthenticateVaultUser(
-		QWidget *parent,
+		QPointer<QWidget> parent,
+		VaultCallbackContext context,
 		VaultAuthenticationCallback callback) {
 	const auto vault = CurrentVault();
 	if (!vault) {
-		callback(VaultResult::Unavailable);
+		Complete(std::move(context), std::move(callback), VaultResult::Unavailable);
 		return;
 	}
-	vault->authenticateUser(parent, std::move(callback));
+	vault->authenticateUser(
+		std::move(parent),
+		std::move(context),
+		std::move(callback));
 }
 
-void CanAuthenticateVaultUser(VaultAuthenticationAvailabilityCallback callback) {
+void CanAuthenticateVaultUser(
+		VaultCallbackContext context,
+		VaultAuthenticationAvailabilityCallback callback) {
 	const auto vault = CurrentVault();
 	if (!vault) {
-		callback(false);
+		Complete(std::move(context), std::move(callback), false);
 		return;
 	}
-	vault->canAuthenticateUser(std::move(callback));
+	vault->canAuthenticateUser(std::move(context), std::move(callback));
 }
 
 } // namespace Reworked::SessionProtection
