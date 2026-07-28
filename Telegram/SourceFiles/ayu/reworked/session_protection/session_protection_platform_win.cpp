@@ -19,6 +19,7 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE
 #include <windows.h>
 #include <VersionHelpers.h>
 #include <wincrypt.h>
+#include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Security.Credentials.UI.h>
 
 #if defined(__has_include)

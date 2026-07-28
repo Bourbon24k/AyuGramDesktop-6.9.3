@@ -531,7 +531,7 @@ void BuildManageContent(SectionBuilder &builder) {
 			rpl::variable<bool>
 		>(false);
 		Reworked::SessionProtection::CanAuthenticateVaultUser(
-			QPointer<QObject>(inner.get()),
+			QPointer<QObject>(inner),
 			[available](bool value) { available->force_assign(value); });
 		const auto button = AddButtonWithIcon(
 			inner,

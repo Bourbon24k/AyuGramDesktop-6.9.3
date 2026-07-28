@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 
 #include "styles/style_boxes.h"
+#include "styles/style_layers.h"
 #include "styles/style_settings.h"
 
 namespace Settings {
@@ -46,22 +47,19 @@ public:
 		Fn<void()> done)
 	: _controller(controller)
 	, _enabling(enabling)
-	, _done(std::move(done)) {
+	, _done(std::move(done))
+	, _passcode(this, st::settingLocalPasscodeInputField, tr::lng_passcode_enter_old()) {
 	}
 
 protected:
 	void prepare() override {
 		setTitle(tr::lng_session_protection_title());
 
-		_passcode = Ui::CreateChild<Ui::PasswordInput>(
-			this,
-			st::settingLocalPasscodeInputField,
-			tr::lng_passcode_enter_old());
-		_passcode->resizeToWidth(
-			st::boxWidth - st::boxPadding.left() - st::boxPadding.right());
-		_passcode->moveToLeft(st::boxPadding.left(), st::boxPadding.top());
-		_passcode->submits(
-		) | rpl::on_next([=] { submit(); }, lifetime());
+		_passcode.resize(
+			st::boxWidth - st::boxPadding.left() - st::boxPadding.right(),
+			_passcode.height());
+		_passcode.moveToLeft(st::boxPadding.left(), st::boxPadding.top());
+		connect(&_passcode, &Ui::MaskedInputField::submitted, [=] { submit(); });
 		addButton(
 			_enabling
 				? tr::lng_session_protection_enable()
@@ -71,24 +69,24 @@ protected:
 		setDimensions(
 			st::boxWidth,
 			st::boxPadding.top()
-				+ _passcode->height()
+				+ _passcode.height()
 				+ st::boxPadding.bottom());
 	}
 
 	void setInnerFocus() override {
-		_passcode->setFocusFast();
+		_passcode.setFocusFast();
 	}
 
 private:
 	void submit() {
-		const auto passcode = _passcode->text();
+		const auto passcode = _passcode.text();
 		if (passcode.isEmpty()) {
-			_passcode->showError();
+			_passcode.showError();
 			return;
 		}
 		if (!passcodeCanTry()) {
-			_passcode->setFocus();
-			_passcode->showError();
+			_passcode.setFocus();
+			_passcode.showError();
 			return;
 		}
 		const auto result = _enabling
@@ -102,12 +100,12 @@ private:
 			closeBox();
 			return;
 		}
-		_passcode->showError();
+		_passcode.showError();
 		if (result == Storage::SessionProtectionResult::IncorrectPasscode) {
 			cSetPasscodeBadTries(cPasscodeBadTries() + 1);
 			cSetPasscodeLastTry(crl::now());
-			_passcode->selectAll();
-			_passcode->setFocus();
+			_passcode.selectAll();
+			_passcode.setFocus();
 			return;
 		}
 		_controller->show(Ui::MakeInformBox(SessionProtectionError(result)));
@@ -116,7 +114,7 @@ private:
 	const not_null<Window::SessionController*> _controller;
 	const bool _enabling;
 	const Fn<void()> _done;
-	object_ptr<Ui::PasswordInput> _passcode;
+	Ui::PasswordInput _passcode;
 };
 
 } // namespace
