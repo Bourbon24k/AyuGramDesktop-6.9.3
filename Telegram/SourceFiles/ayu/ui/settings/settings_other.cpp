@@ -8,15 +8,23 @@
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/reworked/session_protection/session_protection.h"
 #include "ayu/ui/boxes/donate_qr_box.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
 #include "boxes/abstract_box.h"
 #include "core/application.h"
+#include "core/core_settings.h"
+#include "lang/lang_instance.h"
 #include "lang/lang_text_entity.h"
+#include "main/main_domain.h"
+#include "main/main_session.h"
+#include "settings/session_protection_box.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
+#include "storage/storage_domain.h"
+#include "styles/style_boxes.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "ui/integration.h"
@@ -27,11 +35,13 @@
 #include "ui/text/text_utilities.h"
 #include "ui/widgets/buttons.h"
 #include "ui/wrap/vertical_layout.h"
+#include "ui/wrap/slide_wrap.h"
 #include "window/window_session_controller.h"
 #include "window/themes/window_theme.h"
 
 #include <QDesktopServices>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QSvgRenderer>
 
 namespace Settings {
@@ -55,6 +65,24 @@ Asset getAsset(const QString &name) {
 		.icon = std::move(icon),
 		.background = std::move(background)
 	};
+}
+
+[[nodiscard]] bool UsesRussian() {
+	const auto &language = Lang::GetInstance();
+	return language.id().startsWith(u"ru"_q)
+		|| language.baseId().startsWith(u"ru"_q);
+}
+
+[[nodiscard]] QString ReworkedText(
+		const QString &russian,
+		const QString &english) {
+	return UsesRussian() ? russian : english;
+}
+
+[[nodiscard]] rpl::producer<QString> ReworkedTextProducer(
+		const QString &russian,
+		const QString &english) {
+	return rpl::single(ReworkedText(russian, english));
 }
 
 QImage getImage(const QString &name) {
@@ -193,6 +221,127 @@ void BuildCrashReporting(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 #endif
 }
 
+void BuildReworkedSecurity(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	const auto controller = builder.controller();
+	if (!controller) {
+		return;
+	}
+	const auto container = builder.container();
+	const auto protectionEnabled = container->lifetime().make_state<
+		rpl::variable<bool>
+	>(controller->session().domain().local().sessionProtectionEnabled());
+
+	builder.addSkip();
+	builder.addSubsectionTitle(ReworkedTextProducer(
+		u"Безопасность и подключение"_q,
+		u"Security and connectivity"_q));
+
+	ayu.addToggle({
+		.id = u"ayu/reworked-connectivity"_q,
+		.title = ReworkedTextProducer(u"Обход DPI"_q, u"DPI bypass"_q),
+		.getter = [] {
+			return Core::App().settings().proxy().reworkedConnectivityEnabled();
+		},
+		.setter = [](bool enabled) {
+			Core::App().setReworkedConnectivityEnabled(enabled);
+		},
+		.icon = { &st::menuIconIpAddress },
+		.keywords = { u"dpi"_q, u"proxy"_q, u"connectivity"_q },
+	});
+
+	const auto protectionButton = builder.addButton({
+		.id = u"ayu/session-protection"_q,
+		.title = ReworkedTextProducer(
+			u"Защита сессии"_q,
+			u"Session protection"_q),
+		.icon = { &st::menuIconLock },
+		.toggled = protectionEnabled->value(),
+		.keywords = { u"security"_q, u"vault"_q, u"protection"_q },
+	});
+	if (protectionButton) {
+		protectionButton->toggledChanges(
+		) | rpl::filter([=](bool enabling) {
+			return enabling != protectionEnabled->current();
+		}) | rpl::on_next([=](bool enabling) {
+			if (!controller->session().domain().local().hasLocalPasscode()) {
+				controller->show(Ui::MakeInformBox(ReworkedText(
+					u"Сначала задайте локальный пароль в настройках конфиденциальности."_q,
+					u"Set a local passcode in Privacy settings first."_q)));
+				protectionEnabled->force_assign(false);
+				return;
+			}
+			const auto proceed = [=](Fn<void()> &&close) {
+				ShowSessionProtectionPasscodeBox(
+					controller,
+					enabling,
+					[=] {
+						protectionEnabled->force_assign(enabling);
+						close();
+					});
+			};
+			controller->show(Ui::MakeConfirmBox({
+				.text = enabling
+					? ReworkedText(
+						u"Защитить сессию системным хранилищем? Для продолжения нужен текущий локальный пароль."_q,
+						u"Protect this session with the system vault? Your current local passcode is required."_q)
+					: ReworkedText(
+						u"Отключить защиту сессии? Понадобятся текущий локальный пароль и доступ к системному хранилищу."_q,
+						u"Disable session protection? Your current local passcode and system vault access are required."_q),
+				.confirmed = std::move(proceed),
+				.confirmText = ReworkedText(
+					enabling ? u"Включить"_q : u"Отключить"_q,
+					enabling ? u"Enable"_q : u"Disable"_q),
+				.confirmStyle = enabling ? nullptr : &st::attentionBoxButton,
+			}));
+			protectionEnabled->force_assign(!enabling);
+		}, container->lifetime());
+	}
+
+	builder.add([=](const BuildContext &ctx) {
+		v::match(ctx, [&](const WidgetContext &wctx) {
+			const auto content = wctx.container->add(
+				object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+					wctx.container,
+					object_ptr<Ui::VerticalLayout>(wctx.container))
+			)->setDuration(0);
+			const auto inner = content->entity();
+			const auto available = inner->lifetime().make_state<
+				rpl::variable<bool>
+			>(false);
+			Reworked::SessionProtection::CanAuthenticateVaultUser(
+				QPointer<QObject>(inner),
+				[available](bool value) { available->force_assign(value); });
+			const auto button = AddButtonWithIcon(
+				inner,
+				ReworkedTextProducer(
+					u"Требовать системную аутентификацию"_q,
+					u"Require system authentication"_q),
+				st::settingsButton,
+				{ &st::menuIconLock });
+			button->toggleOn(rpl::single(
+				Core::App().settings().sessionProtectionStrongAuthEnabled()));
+			button->toggledChanges(
+			) | rpl::on_next([=](bool enabled) {
+				Core::App().settings().setSessionProtectionStrongAuthEnabled(enabled);
+				Core::App().saveSettingsDelayed();
+			}, inner->lifetime());
+			Ui::AddSkip(inner);
+			Ui::AddDividerText(
+				inner,
+				ReworkedTextProducer(
+					u"После локального пароля потребуется подтвердить вход средствами macOS или Windows."_q,
+					u"After the local passcode, confirm access with macOS or Windows authentication."_q));
+			content->toggleOn(rpl::combine(
+				available->value(),
+				protectionEnabled->value()
+			) | rpl::map([](bool canAuthenticate, bool enabled) {
+				return canAuthenticate && enabled;
+			}));
+		});
+	});
+
+}
+
 void BuildOtherThings(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 
@@ -236,6 +385,7 @@ const auto kMeta = BuildHelper({
 	builder.addSkip();
 	BuildDonations(builder);
 	BuildCrashReporting(builder, ayu);
+	BuildReworkedSecurity(builder, ayu);
 	BuildOtherThings(builder);
 });
 

@@ -630,7 +630,6 @@ private:
 	not_null<ProxiesBoxController*> _controller;
 	Core::SettingsProxy &_settings;
 	QPointer<Ui::Checkbox> _tryIPv6;
-	QPointer<Ui::Checkbox> _reworkedConnectivity;
 	std::shared_ptr<Ui::RadioenumGroup<ProxyData::Settings>> _proxySettings;
 	QPointer<Ui::SlideWrap<Ui::Checkbox>> _proxyForCalls;
 	QPointer<Ui::SlideWrap<Ui::Checkbox>> _proxyRotation;
@@ -1114,12 +1113,6 @@ void ProxiesBox::setupContent() {
 			tr::lng_connection_try_ipv6(tr::now),
 			_settings.tryIPv6()),
 		st::proxyTryIPv6Padding);
-	_reworkedConnectivity = inner->add(
-		object_ptr<Ui::Checkbox>(
-			inner,
-			tr::lng_reworked_connectivity(tr::now),
-			_settings.reworkedConnectivityEnabled()),
-		st::proxyTryIPv6Padding);
 	_proxySettings
 		= std::make_shared<Ui::RadioenumGroup<ProxyData::Settings>>(
 			_settings.settings());
@@ -1230,10 +1223,6 @@ void ProxiesBox::setupContent() {
 	) | rpl::on_next([=](bool checked) {
 		_controller->setTryIPv6(checked);
 	}, _tryIPv6->lifetime());
-	_reworkedConnectivity->checkedChanges(
-	) | rpl::on_next([=](bool checked) {
-		_controller->setReworkedConnectivityEnabled(checked);
-	}, _reworkedConnectivity->lifetime());
 
 	_controller->proxySettingsValue(
 	) | rpl::on_next([=](ProxyData::Settings value) {

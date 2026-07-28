@@ -7,7 +7,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_local_passcode.h"
 
-#include "ayu/reworked/session_protection/session_protection.h"
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
 #include "base/system_unlock.h"
@@ -20,7 +19,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "settings/cloud_password/settings_cloud_password_common.h"
 #include "settings/cloud_password/settings_cloud_password_step.h"
-#include "settings/session_protection_box.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 #include "storage/storage_domain.h"
@@ -431,9 +429,6 @@ void BuildManageContent(SectionBuilder &builder) {
 		rpl::event_stream<> autoLockBoxClosing;
 	};
 	const auto state = container->lifetime().make_state<State>();
-	const auto protectionEnabled = container->lifetime().make_state<
-		rpl::variable<bool>
-	>(controller->session().domain().local().sessionProtectionEnabled());
 
 	builder.addSkip();
 
@@ -482,81 +477,6 @@ void BuildManageContent(SectionBuilder &builder) {
 			) | rpl::start_to_stream(state->autoLockBoxClosing, box->lifetime());
 		});
 	}
-
-	builder.addSkip();
-
-	const auto protectionButton = builder.addButton({
-		.id = u"passcode/session-protection"_q,
-		.title = tr::lng_session_protection_title(),
-		.icon = { &st::menuIconLock },
-		.toggled = protectionEnabled->value(),
-		.keywords = { u"security"_q, u"vault"_q, u"protection"_q },
-	});
-	if (protectionButton) {
-		protectionButton->toggledChanges(
-		) | rpl::filter([=](bool enabling) {
-			return enabling != protectionEnabled->current();
-		}) | rpl::on_next([=](bool enabling) {
-			const auto proceed = [=](Fn<void()> &&close) {
-				ShowSessionProtectionPasscodeBox(
-					controller,
-					enabling,
-					[=] {
-						protectionEnabled->force_assign(enabling);
-						close();
-					});
-			};
-			controller->show(Ui::MakeConfirmBox({
-				.text = enabling
-					? tr::lng_session_protection_enable_sure()
-					: tr::lng_session_protection_disable_sure(),
-				.confirmed = std::move(proceed),
-				.confirmText = enabling
-					? tr::lng_session_protection_enable()
-					: tr::lng_session_protection_disable(),
-				.confirmStyle = enabling ? nullptr : &st::attentionBoxButton,
-			}));
-			protectionEnabled->force_assign(!enabling);
-		}, container->lifetime());
-	}
-
-	builder.add([=](const WidgetContext &ctx) {
-		const auto content = ctx.container->add(
-			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-				ctx.container,
-				object_ptr<Ui::VerticalLayout>(ctx.container))
-		)->setDuration(0);
-		const auto inner = content->entity();
-		const auto available = inner->lifetime().make_state<
-			rpl::variable<bool>
-		>(false);
-		Reworked::SessionProtection::CanAuthenticateVaultUser(
-			QPointer<QObject>(inner),
-			[available](bool value) { available->force_assign(value); });
-		const auto button = AddButtonWithIcon(
-			inner,
-			tr::lng_session_protection_strong_auth(),
-			st::settingsButton,
-			{ &st::menuIconLock });
-		button->toggleOn(rpl::single(
-			Core::App().settings().sessionProtectionStrongAuthEnabled()));
-		button->toggledChanges(
-		) | rpl::on_next([=](bool enabled) {
-			Core::App().settings().setSessionProtectionStrongAuthEnabled(enabled);
-			Core::App().saveSettingsDelayed();
-		}, inner->lifetime());
-		Ui::AddSkip(inner);
-		Ui::AddDividerText(
-			inner,
-			tr::lng_session_protection_strong_auth_about());
-		content->toggleOn(rpl::combine(
-			available->value(),
-			protectionEnabled->value()
-		) | rpl::map([](bool canAuthenticate, bool enabled) {
-			return canAuthenticate && enabled;
-		}));
-		return SectionBuilder::WidgetToAdd{};
-	});
 
 	using Divider = CloudPassword::OneEdgeBoxContentDivider;
 	builder.add([](const WidgetContext &ctx) {
